@@ -161,6 +161,7 @@ function FH:UpdateMacro()
     local needEquip = false
     local itemsToEquip = {}
     local anyOutfitConfigured = false
+    local tooltipItem = nil
 
     -- Check outfit
     for slot, itemID in pairs(self.db.outfit) do
@@ -172,20 +173,38 @@ function FH:UpdateMacro()
                 local name = GetItemInfo(itemID)
                 if name then
                     table.insert(itemsToEquip, "/equipslot " .. slot .. " " .. name)
+                    if not tooltipItem then tooltipItem = name end
                 end
             end
         end
     end
 
-    if needEquip then
-        local macroStr = table.concat(itemsToEquip, "\n")
-        -- print("FH Debug: Equipping - " .. macroStr:gsub("\n", " ; "))
-        self.UI.mainButton:SetAttribute("type1", "macro")
-        self.UI.mainButton:SetAttribute("macrotext1", macroStr)
-        
+    local function ApplyMacro(macroStr, icon, tooltip)
+        self.UI.mainButton:SetAttribute("type", "macro")
+        self.UI.mainButton:SetAttribute("macrotext", macroStr)
         if self.UI.mainButton.icon then
-            self.UI.mainButton.icon:SetTexture("Interface\\Icons\\INV_Chest_Cloth_17")
+            self.UI.mainButton.icon:SetTexture(icon)
         end
+        
+        local idx = GetMacroIndexByName("FishHelper")
+        if idx > 0 then
+            local mText = macroStr
+            if tooltip then
+                mText = "#showtooltip " .. tooltip .. "\n" .. macroStr
+            else
+                mText = "#showtooltip\n" .. macroStr
+            end
+            EditMacro(idx, "FishHelper", "INV_Misc_QuestionMark", mText)
+        end
+        self.currentMacroText = macroStr
+        self.currentMacroTooltip = tooltip
+    end
+
+    if needEquip then
+        -- Add the script call to save gear right before we equip
+        table.insert(itemsToEquip, 1, "/run FishingHelper:SaveCurrentGear()")
+        local macroStr = table.concat(itemsToEquip, "\n")
+        ApplyMacro(macroStr, "Interface\\Icons\\INV_Chest_Cloth_17", tooltipItem)
         return
     end
 
@@ -203,28 +222,16 @@ function FH:UpdateMacro()
             local hasMainHandEnchant, mainHandExpiration = GetWeaponEnchantInfo()
             if not hasMainHandEnchant or (mainHandExpiration and mainHandExpiration < 20000) then
                 local macroStr = "/use " .. name .. "\n/use 16"
-                -- print("FH Debug: Luring - " .. macroStr:gsub("\n", " ; "))
-                needLure = true
-                self.UI.mainButton:SetAttribute("type1", "macro")
-                self.UI.mainButton:SetAttribute("macrotext1", macroStr)
-                
-                if self.UI.mainButton.icon then
-                    self.UI.mainButton.icon:SetTexture(GetItemIcon(lureID))
-                end
+                ApplyMacro(macroStr, GetItemIcon(lureID), name)
                 return
             end
         end
     end
 
     -- Ready to fish
-    -- print("FH Debug: Fishing!")
-    self.UI.mainButton:SetAttribute("type1", "macro")
-    self.UI.mainButton:SetAttribute("macrotext1", "/cast Fishing")
-    if self.UI.mainButton.icon then
-        local _, _, icon = GetSpellInfo("Fishing")
-        if not icon then icon = "Interface\\Icons\\Trade_Fishing" end
-        self.UI.mainButton.icon:SetTexture(icon)
-    end
+    local _, _, icon = GetSpellInfo("Fishing")
+    if not icon then icon = "Interface\\Icons\\Trade_Fishing" end
+    ApplyMacro("/cast Fishing", icon, "Fishing")
 end
 
 frame:SetScript("OnEvent", function(self, event, ...)

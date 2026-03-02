@@ -103,25 +103,47 @@ function FH.UI:Initialize()
         local point, relativeTo, relativePoint, xOfs, yOfs = self:GetPoint()
         FH.db.framePosition = { point = point, relativePoint = relativePoint, xOfs = xOfs, yOfs = yOfs }
     end)
-    
+
     -- Main Action Button (Secure)
-    self.mainButton = CreateFrame("Button", "FishingHelperMainButton", self.frame, "SecureActionButtonTemplate")
+    self.mainButton = CreateFrame("Button", "FishingHelperMainButton", self.frame, "ItemButtonTemplate, SecureActionButtonTemplate")
     self.mainButton:SetSize(40, 40)
     self.mainButton:SetPoint("TOPLEFT", self.frame, "TOPLEFT", 15, -35)
-    self.mainButton:RegisterForClicks("LeftButtonDown", "AnyDown")
+    self.mainButton:RegisterForClicks("AnyUp")
     self.mainButton:SetAttribute("type", "macro")
     
-    -- Manually set up visual elements for mainButton
-    self.mainButton.icon = self.mainButton:CreateTexture(nil, "BACKGROUND")
-    self.mainButton.icon:SetAllPoints()
+    self.mainButton.icon = _G["FishingHelperMainButtonIconTexture"]
+    if not self.mainButton.icon then
+        self.mainButton.icon = self.mainButton:CreateTexture(nil, "BACKGROUND")
+        self.mainButton.icon:SetAllPoints()
+    end
     self.mainButton.icon:SetTexture("Interface\\Icons\\Trade_Fishing")
 
-    self.mainButton:SetNormalTexture("Interface\\Buttons\\UI-Quickslot2")
-    self.mainButton:SetPushedTexture("Interface\\Buttons\\UI-Quickslot-Depress")
-    self.mainButton:SetHighlightTexture("Interface\\Buttons\\ButtonHilight-Square", "ADD")
+    self.mainButton:RegisterForDrag("LeftButton")
+    self.mainButton:SetScript("OnDragStart", function(self)
+        if InCombatLockdown() then
+            print("|cFFFF0000Fishing Helper:|r Cannot create macro in combat. Try again when out of combat.")
+            return
+        end
+        local macroName = "FishHelper"
+        local macroIndex = GetMacroIndexByName(macroName)
+        
+        local macroText = FH.currentMacroText or "/cast Fishing"
+        local tooltip = FH.currentMacroTooltip or "Fishing"
+        local fullText = "#showtooltip " .. tooltip .. "\n" .. macroText
 
-    self.mainButton:SetScript("PreClick", function(self)
-        FH:SaveCurrentGear()
+        if macroIndex == 0 then
+            macroIndex = CreateMacro(macroName, "INV_Misc_QuestionMark", fullText, 1) -- 1 for character specific
+            if not macroIndex or macroIndex == 0 then
+                macroIndex = CreateMacro(macroName, "INV_Misc_QuestionMark", fullText, nil) -- try global
+            end
+            if not macroIndex or macroIndex == 0 then
+                print("|cFFFF0000Fishing Helper:|r You have no free macro slots!")
+                return
+            end
+        else
+            EditMacro(macroIndex, macroName, "INV_Misc_QuestionMark", fullText)
+        end
+        PickupMacro(macroName)
     end)
     
     -- Main Button Label
