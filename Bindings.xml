@@ -1,0 +1,6 @@
+<Bindings>
+    <Binding name="CLICK FishingHelperMainButton:LeftButton" category="Fishing Helper">
+    </Binding>
+    <Binding name="CLICK FishingHelperStopButton:LeftButton" category="Fishing Helper">
+    </Binding>
+</Bindings>
