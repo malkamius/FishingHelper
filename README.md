@@ -19,7 +19,7 @@ Fishing Helper is a World of Warcraft (TBC) addon designed to simplify the fishi
 
 1. Type `/fh` in chat to open the Fishing Helper frame.
 2. Drag and drop your fishing pole, fishing hat, gloves, boots, and preferred lure into the corresponding slots on the frame. To clear a slot, right-click it.
-3. Drag the main action button ("Drag this spell or bind a key to fish.") from the top-left of the frame onto your standard action bar, or set a keybind for it.
+3. Drag the main action button from the top-left of the frame onto your standard action bar, or set a keybind for it. The dragged macro will dynamically update its icon and tooltip to show exactly what action it will perform next!
 4. Click your action bar button (or press your keybind) to start fishing!
     - **First click**: Equips your configured fishing gear.
     - **Second click**: Applies the configured lure to your fishing pole (if the pole does not currently have a lure or enchant).
