@@ -2,7 +2,8 @@ local addonName, addonTable = ...
 local FH = {}
 addonTable[1] = FH
 _G["FishingHelper"] = FH
-
+_G["BINDING_NAME_CLICK FishingHelperMainButton:LeftButton"] = "Cast Fishing"
+_G["BINDING_NAME_CLICK FishingHelperStopButton:LeftButton"] = "Stop Fishing"
 -- Default database
 local defaultDB = {
     framePosition = { point = "CENTER", relativePoint = "CENTER", xOfs = 0, yOfs = 0 },
@@ -13,7 +14,8 @@ local defaultDB = {
         [16] = nil, -- Main Hand (INVSLOT_MAINHAND)
     },
     lureID = nil,
-    savedGear = {} -- Used to restore previous gear
+    savedGear = {}, -- Used to restore previous gear
+    minimapPos = 45 -- Minimap button angle in degrees
 }
 
 local frame = CreateFrame("Frame")
