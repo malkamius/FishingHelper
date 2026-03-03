@@ -108,7 +108,7 @@ function FH.UI:Initialize()
     self.mainButton = CreateFrame("Button", "FishingHelperMainButton", self.frame, "ItemButtonTemplate, SecureActionButtonTemplate")
     self.mainButton:SetSize(40, 40)
     self.mainButton:SetPoint("TOPLEFT", self.frame, "TOPLEFT", 15, -35)
-    self.mainButton:RegisterForClicks("AnyUp")
+    self.mainButton:RegisterForClicks("AnyDown")
     self.mainButton:SetAttribute("type", "macro")
     
     self.mainButton.icon = _G["FishingHelperMainButtonIconTexture"]
