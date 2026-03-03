@@ -29,11 +29,11 @@ frame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
 -- Slash command
 SLASH_FISHINGHELPER1 = "/fh"
 function SlashCmdList.FISHINGHELPER(msg, editbox)
-    if FishingHelperFrame then
-        if FishingHelperFrame:IsShown() then
-            FishingHelperFrame:Hide()
+    if FH.UI and FH.UI.frame then
+        if FH.UI.frame:IsShown() then
+            FH.UI.frame:Hide()
         else
-            FishingHelperFrame:Show()
+            FH.UI.frame:Show()
         end
     end
 end
