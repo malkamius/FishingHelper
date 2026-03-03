@@ -49,7 +49,7 @@ function FH:Initialize()
         end
     end
     self.db = FishingHelperDB
-    
+
     self.updateTimer = 0
     frame:SetScript("OnUpdate", function(self, elapsed)
         FH.updateTimer = FH.updateTimer + elapsed
@@ -60,10 +60,10 @@ function FH:Initialize()
             end
         end
     end)
-    
+
     self.volumeSaved = false
     self.autoLootSaved = false
-    
+
     print("|cFF00FF00Fishing Helper|r loaded! Type /fh to toggle the frame.")
 end
 
@@ -71,7 +71,7 @@ function FH:EnhanceVolume()
     if self.volumeSaved then return end
     self.oldMasterVolume = GetCVar("Sound_MasterVolume")
     self.oldSFXVolume = GetCVar("Sound_SFXVolume")
-    
+
     SetCVar("Sound_MasterVolume", "1.0")
     SetCVar("Sound_SFXVolume", "1.0")
     self.volumeSaved = true
@@ -108,7 +108,7 @@ function FH:SaveCurrentGear()
             break
         end
     end
-    
+
     if needEquip then
         wipe(self.db.savedGear)
         for slot, itemID in pairs(self.db.outfit) do
@@ -126,7 +126,7 @@ end
 
 function FH:UpdateStopMacro()
     if InCombatLockdown() or not self.UI or not self.UI.stopButton then return end
-    
+
     local lines = {}
     -- Restore offhand AFTER mainhand, so sort it (16 comes before 17)
     local sortedSlots = {}
@@ -144,10 +144,10 @@ function FH:UpdateStopMacro()
             end
         end
     end
-    
+
     -- When stopping fishing, run a macro to equip old gear, AND a secure snippet or lua to restore AutoLoot.
     -- We can just hook the "OnClick" of stopButton securely, no, insecurely to restore autoloot, since we aren't in combat.
-    
+
     self.UI.stopButton:SetAttribute("type", "macro")
     if #lines > 0 then
         self.UI.stopButton:SetAttribute("macrotext", table.concat(lines, "\n"))
@@ -187,7 +187,7 @@ function FH:UpdateMacro()
         if self.UI.mainButton.icon then
             self.UI.mainButton.icon:SetTexture(icon)
         end
-        
+
         local idx = GetMacroIndexByName("FishHelper")
         if idx > 0 then
             local mText = macroStr
@@ -219,12 +219,12 @@ function FH:UpdateMacro()
     local needLure = false
     local lureID = self.db.lureID
     if lureID and anyOutfitConfigured then
-        local name = GetItemInfo(lureID)
-        if name and GetItemCount(lureID) > 0 then
+        local name = C_Item.GetItemInfo(lureID)
+        if name and C_Item.GetItemCount(lureID) > 0 then
             local hasMainHandEnchant, mainHandExpiration = GetWeaponEnchantInfo()
             if not hasMainHandEnchant or (mainHandExpiration and mainHandExpiration < 20000) then
                 local macroStr = "/use " .. name .. "\n/use 16"
-                ApplyMacro(macroStr, GetItemIcon(lureID), name)
+                ApplyMacro(macroStr, C_Item.GetItemIconByID(lureID), name)
                 return
             end
         end
@@ -247,7 +247,7 @@ frame:SetScript("OnEvent", function(self, event, ...)
             self:UnregisterEvent("ADDON_LOADED")
             FH:UpdateMacro()
             FH:UpdateStopMacro()
-            
+
             -- Hook Stop Button Click for AutoLoot Restore
             if FH.UI and FH.UI.stopButton then
                 FH.UI.stopButton:HookScript("OnClick", function()
