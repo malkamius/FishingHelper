@@ -196,7 +196,10 @@ function FH:UpdateMacro()
             else
                 mText = "#showtooltip\n" .. macroStr
             end
-            EditMacro(idx, "FishHelper", "INV_Misc_QuestionMark", mText)
+            local name, icon, body = GetMacroInfo(idx)
+            if body ~= mText then
+                EditMacro(idx, "FishHelper", "INV_Misc_QuestionMark", mText)
+            end
         end
         self.currentMacroText = macroStr
         self.currentMacroTooltip = tooltip
