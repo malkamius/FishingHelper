@@ -268,19 +268,18 @@ frame:SetScript("OnEvent", function(self, event, ...)
             FH.UI:UpdateLureCount()
         end
     elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
-        local unit, target, castID, spellID = ...
-        if unit == "player" then
+        local unitTarget, castID, spellID = ...
+        if unitTarget == "player" then
             local name = GetSpellInfo(spellID)
             if name == "Fishing" then
                 FH:EnhanceVolume()
             end
         end
     elseif event == "UNIT_SPELLCAST_CHANNEL_STOP" then
-        local unit, target, castID, spellID = ...
-        if unit == "player" then
+        local unitTarget, castID, spellID = ...
+        if unitTarget == "player" then
             local name = GetSpellInfo(spellID)
             if name == "Fishing" then
-                -- Add a slight delay to restore volume in case they catch back to back
                 C_Timer.After(1, function()
                     FH:RestoreVolume()
                 end)
