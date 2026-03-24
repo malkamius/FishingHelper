@@ -138,7 +138,7 @@ function FH:UpdateStopMacro()
     for _, slot in ipairs(sortedSlots) do
         local link = self.db.savedGear[slot]
         if link then
-            local name = GetItemInfo(link)
+            local name = C_Item.GetItemInfo(link)
             if name then
                 table.insert(lines, "/equipslot " .. slot .. " " .. name)
             end
@@ -172,7 +172,7 @@ function FH:UpdateMacro()
             local equippedID = GetInventoryItemID("player", slot)
             if equippedID ~= itemID then
                 needEquip = true
-                local name = GetItemInfo(itemID)
+                local name = C_Item.GetItemInfo(itemID)
                 if name then
                     table.insert(itemsToEquip, "/equipslot " .. slot .. " " .. name)
                     if not tooltipItem then tooltipItem = name end
@@ -234,6 +234,7 @@ function FH:UpdateMacro()
     end
 
     -- Ready to fish
+    ---@diagnostic disable-next-line: undefined-global
     local _, _, icon = GetSpellInfo("Fishing")
     if not icon then icon = "Interface\\Icons\\Trade_Fishing" end
     ApplyMacro("/cast Fishing", icon, "Fishing")
@@ -270,18 +271,24 @@ frame:SetScript("OnEvent", function(self, event, ...)
     elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
         local unitTarget, castID, spellID = ...
         if unitTarget == "player" then
+            ---@diagnostic disable-next-line: undefined-global
             local name = GetSpellInfo(spellID)
             if name == "Fishing" then
+                FH.isChannelingFishing = true
                 FH:EnhanceVolume()
             end
         end
     elseif event == "UNIT_SPELLCAST_CHANNEL_STOP" then
         local unitTarget, castID, spellID = ...
         if unitTarget == "player" then
+            ---@diagnostic disable-next-line: undefined-global
             local name = GetSpellInfo(spellID)
             if name == "Fishing" then
+                FH.isChannelingFishing = false
                 C_Timer.After(1, function()
-                    FH:RestoreVolume()
+                    if not FH.isChannelingFishing then
+                        FH:RestoreVolume()
+                    end
                 end)
             end
         end

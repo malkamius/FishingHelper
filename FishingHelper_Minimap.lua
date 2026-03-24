@@ -78,6 +78,7 @@ function FH.UI:UpdateMinimapButton()
     local x = math.cos(angle)
     local y = math.sin(angle)
 
+    ---@diagnostic disable-next-line: undefined-global
     local minimapShape = GetMinimapShape and GetMinimapShape() or "ROUND"
 
     local radius = 80

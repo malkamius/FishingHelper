@@ -276,7 +276,7 @@ function FH.UI:UpdateLureCount()
     local countStr = ""
     local lureID = FH.db.lureID
     if lureID then
-        local count = GetItemCount(lureID)
+        local count = C_Item.GetItemCount(lureID)
         if count > 0 then
             countStr = tostring(count)
         else
