@@ -260,6 +260,28 @@ frame:SetScript("OnEvent", function(self, event, ...)
             end
         end
     elseif event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_EQUIPMENT_CHANGED" then
+        if event == "PLAYER_EQUIPMENT_CHANGED" then
+            local slotID = ...
+            if slotID and FH.db.savedGear[slotID] then
+                local currentItemID = GetInventoryItemID("player", slotID)
+                local fishingItemID = FH.db.outfit[slotID]
+
+                -- Check if the current item matches our configured fishing outfit
+                if fishingItemID then
+                    if currentItemID ~= fishingItemID then
+                        -- User manually equipped something else in an outfit slot
+                        FH.db.savedGear[slotID] = nil
+                    end
+                else
+                    -- No fishing item configured for this slot, but we have something saved (e.g. slot 17)
+                    -- If the slot is no longer empty, it's a manual change.
+                    if currentItemID and currentItemID ~= 0 then
+                        FH.db.savedGear[slotID] = nil
+                    end
+                end
+            end
+        end
+
         if FH.UpdateMacro then
             FH:UpdateMacro()
             FH:UpdateStopMacro()
