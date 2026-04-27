@@ -25,6 +25,11 @@ frame:RegisterEvent("BAG_UPDATE")
 frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 frame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
 frame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
+frame:RegisterEvent("UNIT_SPELLCAST_START")
+frame:RegisterEvent("UNIT_SPELLCAST_STOP")
+frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
+frame:RegisterEvent("UNIT_SPELLCAST_FAILED")
+frame:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
 
 -- Slash command
 SLASH_FISHINGHELPER1 = "/fh"
@@ -53,7 +58,7 @@ function FH:Initialize()
     self.updateTimer = 0
     frame:SetScript("OnUpdate", function(self, elapsed)
         FH.updateTimer = FH.updateTimer + elapsed
-        if FH.updateTimer > 1.0 then
+        if FH.updateTimer > 0.2 then
             FH.updateTimer = 0
             if FH.UpdateMacro then
                 FH:UpdateMacro()
@@ -219,9 +224,9 @@ function FH:UpdateMacro()
     end
 
     -- Outfit is equipped. Check Lure.
-    local needLure = false
     local lureID = self.db.lureID
-    if lureID and anyOutfitConfigured then
+    local recentlySucceeded = self.lastLureSuccess and (GetTime() - self.lastLureSuccess < 2.0)
+    if lureID and anyOutfitConfigured and not self.isApplyingLure and not recentlySucceeded then
         local name = C_Item.GetItemInfo(lureID)
         if name and C_Item.GetItemCount(lureID) > 0 then
             local hasMainHandEnchant, mainHandExpiration = GetWeaponEnchantInfo()
@@ -291,7 +296,7 @@ frame:SetScript("OnEvent", function(self, event, ...)
             FH.UI:UpdateLureCount()
         end
     elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
-        local unitTarget, castID, spellID = ...
+        local unitTarget, _, spellID = ...
         if unitTarget == "player" then
             ---@diagnostic disable-next-line: undefined-global
             local name = GetSpellInfo(spellID)
@@ -301,7 +306,7 @@ frame:SetScript("OnEvent", function(self, event, ...)
             end
         end
     elseif event == "UNIT_SPELLCAST_CHANNEL_STOP" then
-        local unitTarget, castID, spellID = ...
+        local unitTarget, _, spellID = ...
         if unitTarget == "player" then
             ---@diagnostic disable-next-line: undefined-global
             local name = GetSpellInfo(spellID)
@@ -313,6 +318,53 @@ frame:SetScript("OnEvent", function(self, event, ...)
                     end
                 end)
             end
+        end
+    elseif event == "UNIT_SPELLCAST_START" then
+        local unitTarget, _, spellID = ...
+        if unitTarget == "player" then
+            ---@diagnostic disable-next-line: undefined-global
+            local spellName = GetSpellInfo(spellID)
+            local lureID = FH.db.lureID
+            if lureID then
+                local lureName = C_Item.GetItemInfo(lureID)
+                if spellName == lureName then
+                    FH.isApplyingLure = true
+                    FH.lastLureSuccess = nil
+                    FH:UpdateMacro()
+                end
+            end
+        end
+    elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
+        local unitTarget, _, spellID = ...
+        if unitTarget == "player" then
+            ---@diagnostic disable-next-line: undefined-global
+            local spellName = GetSpellInfo(spellID)
+            local lureID = FH.db.lureID
+            if lureID then
+                local lureName = C_Item.GetItemInfo(lureID)
+                if spellName == lureName then
+                    FH.lastLureSuccess = GetTime()
+                end
+            end
+        end
+    elseif event == "UNIT_SPELLCAST_FAILED" or event == "UNIT_SPELLCAST_INTERRUPTED" then
+        local unitTarget, _, spellID = ...
+        if unitTarget == "player" then
+            ---@diagnostic disable-next-line: undefined-global
+            local spellName = GetSpellInfo(spellID)
+            local lureID = FH.db.lureID
+            if lureID then
+                local lureName = C_Item.GetItemInfo(lureID)
+                if spellName == lureName then
+                    FH.lastLureSuccess = nil
+                end
+            end
+        end
+    elseif event == "UNIT_SPELLCAST_STOP" then
+        local unitTarget = ...
+        if unitTarget == "player" then
+            FH.isApplyingLure = false
+            FH:UpdateMacro()
         end
     end
 end)
