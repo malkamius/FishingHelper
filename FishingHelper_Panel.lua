@@ -285,3 +285,233 @@ function FH.UI:UpdateLureCount()
     end
     self.slotLure.count:SetText(countStr)
 end
+
+function FH.UI:CreateSettingsFrame()
+    if self.settingsFrame then return end
+
+    self.settingsFrame = CreateFrame("Frame", "FishingHelperSettingsFrame", UIParent, "BasicFrameTemplateWithInset")
+    self.settingsFrame:SetSize(320, 130)
+    self.settingsFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
+
+    self.settingsFrame.title = self.settingsFrame:CreateFontString(nil, "OVERLAY")
+    self.settingsFrame.title:SetFontObject("GameFontHighlight")
+    self.settingsFrame.title:SetPoint("LEFT", self.settingsFrame.TitleBg, "LEFT", 5, 0)
+    self.settingsFrame.title:SetText("Fishing Helper Settings")
+
+    self.settingsFrame:SetMovable(true)
+    self.settingsFrame:EnableMouse(true)
+    self.settingsFrame:RegisterForDrag("LeftButton")
+    self.settingsFrame:SetScript("OnDragStart", self.settingsFrame.StartMoving)
+    self.settingsFrame:SetScript("OnDragStop", self.settingsFrame.StopMovingOrSizing)
+
+    -- Explicitly prevent settings frame from intercepting and consuming keyboard events
+    self.settingsFrame:EnableKeyboard(false)
+    self.settingsFrame:SetPropagateKeyboardInput(true)
+
+    if self.settingsFrame.CloseButton then
+        self.settingsFrame.CloseButton:SetScript("OnClick", function()
+            self.settingsFrame:Hide()
+        end)
+    end
+
+    -- Screen blocker to cancel binding mode when clicking outside the settings window
+    local blocker = CreateFrame("Button", "FishingHelperSettingsBlocker", UIParent)
+    blocker:SetAllPoints(UIParent)
+    blocker:SetFrameStrata("HIGH")
+    blocker:SetFrameLevel(1)
+    blocker:Hide()
+
+    self.settingsFrame:SetFrameStrata("HIGH")
+    self.settingsFrame:SetFrameLevel(2) -- Sits on top of the blocker
+
+    blocker:SetScript("OnClick", function(blockerSelf)
+        if self.settingsFrame.castRow and self.settingsFrame.castRow.isBinding then
+            self.settingsFrame.castRow.isBinding = false
+            self.settingsFrame.castRow:EnableKeyboard(false)
+            self.settingsFrame.castRow:UpdateText()
+        end
+        if self.settingsFrame.stopRow and self.settingsFrame.stopRow.isBinding then
+            self.settingsFrame.stopRow.isBinding = false
+            self.settingsFrame.stopRow:EnableKeyboard(false)
+            self.settingsFrame.stopRow:UpdateText()
+        end
+        blockerSelf:Hide()
+    end)
+    self.settingsFrame.blocker = blocker
+
+    self.settingsFrame:HookScript("OnHide", function()
+        if blocker then
+            blocker:Hide()
+        end
+    end)
+
+    -- Helper function to create a row
+    local function CreateKeybindRow(parent, labelText, command, yOffset)
+        local label = parent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+        label:SetPoint("TOPLEFT", parent, "TOPLEFT", 20, yOffset)
+        label:SetText(labelText)
+
+        local btn = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
+        btn:SetSize(140, 22)
+        btn:SetPoint("TOPRIGHT", parent, "TOPRIGHT", -20, yOffset)
+        btn:RegisterForClicks("AnyUp")
+        btn:EnableMouseWheel(true)
+
+        -- Explicitly default keyboard settings to false
+        btn:EnableKeyboard(false)
+        btn:SetPropagateKeyboardInput(true)
+
+        function btn:UpdateText()
+            local key = GetBindingKey(command)
+            if key then
+                self:SetText(key)
+            else
+                self:SetText("|cff888888Not Bound|r")
+            end
+        end
+
+        btn:UpdateText()
+        btn.isBinding = false
+
+        btn:SetScript("OnClick", function(self, button)
+            if self.isBinding then
+                if button == "LeftButton" then
+                    self.isBinding = false
+                    self:EnableKeyboard(false)
+                    self:UpdateText()
+                    if parent.blocker then parent.blocker:Hide() end
+                else
+                    self.isBinding = false
+                    self:EnableKeyboard(false)
+
+                    local mouseMap = {
+                        RightButton = "BUTTON2",
+                        MiddleButton = "BUTTON3",
+                    }
+                    local keyName = mouseMap[button] or string.upper(button)
+
+                    local modifier = ""
+                    if IsShiftKeyDown() then modifier = modifier .. "SHIFT-" end
+                    if IsControlKeyDown() then modifier = modifier .. "CTRL-" end
+                    if IsAltKeyDown() then modifier = modifier .. "ALT-" end
+
+                    local finalKey = modifier .. keyName
+
+                    local key1, key2 = GetBindingKey(command)
+                    if key1 then SetBinding(key1, nil) end
+                    if key2 then SetBinding(key2, nil) end
+
+                    SetBinding(finalKey, command)
+                    SaveBindings(GetCurrentBindingSet())
+
+                    self:UpdateText()
+                    if parent.blocker then parent.blocker:Hide() end
+                end
+            else
+                -- Cancel any other row's binding mode
+                if parent.castRow and parent.castRow ~= self and parent.castRow.isBinding then
+                    parent.castRow.isBinding = false
+                    parent.castRow:EnableKeyboard(false)
+                    parent.castRow:UpdateText()
+                end
+                if parent.stopRow and parent.stopRow ~= self and parent.stopRow.isBinding then
+                    parent.stopRow.isBinding = false
+                    parent.stopRow:EnableKeyboard(false)
+                    parent.stopRow:UpdateText()
+                end
+
+                self.isBinding = true
+                self:SetText("|cFF00FF00Press Key...|r")
+                self:EnableKeyboard(true)
+                if parent.blocker then parent.blocker:Show() end
+            end
+        end)
+
+        btn:SetScript("OnKeyDown", function(self, key)
+            if not self.isBinding then return end
+
+            if key == "LSHIFT" or key == "RSHIFT" or key == "LCTRL" or key == "RCTRL" or key == "LALT" or key == "RALT" then
+                return
+            end
+
+            self.isBinding = false
+            self:EnableKeyboard(false)
+
+            if key == "ESCAPE" then
+                local key1, key2 = GetBindingKey(command)
+                if key1 then SetBinding(key1, nil) end
+                if key2 then SetBinding(key2, nil) end
+                SaveBindings(GetCurrentBindingSet())
+                self:UpdateText()
+                if parent.blocker then parent.blocker:Hide() end
+                return
+            end
+
+            local modifier = ""
+            if IsShiftKeyDown() then modifier = modifier .. "SHIFT-" end
+            if IsControlKeyDown() then modifier = modifier .. "CTRL-" end
+            if IsAltKeyDown() then modifier = modifier .. "ALT-" end
+
+            local finalKey = modifier .. key
+
+            -- Clear this command's existing keys
+            local key1, key2 = GetBindingKey(command)
+            if key1 then SetBinding(key1, nil) end
+            if key2 then SetBinding(key2, nil) end
+
+            SetBinding(finalKey, command)
+            SaveBindings(GetCurrentBindingSet())
+
+            self:UpdateText()
+            if parent.blocker then parent.blocker:Hide() end
+        end)
+
+        btn:SetScript("OnMouseWheel", function(self, delta)
+            if not self.isBinding then return end
+
+            self.isBinding = false
+            self:EnableKeyboard(false)
+
+            local keyName = delta > 0 and "MOUSEWHEELUP" or "MOUSEWHEELDOWN"
+
+            local modifier = ""
+            if IsShiftKeyDown() then modifier = modifier .. "SHIFT-" end
+            if IsControlKeyDown() then modifier = modifier .. "CTRL-" end
+            if IsAltKeyDown() then modifier = modifier .. "ALT-" end
+
+            local finalKey = modifier .. keyName
+
+            local key1, key2 = GetBindingKey(command)
+            if key1 then SetBinding(key1, nil) end
+            if key2 then SetBinding(key2, nil) end
+
+            SetBinding(finalKey, command)
+            SaveBindings(GetCurrentBindingSet())
+
+            self:UpdateText()
+            if parent.blocker then parent.blocker:Hide() end
+        end)
+
+        btn:SetScript("OnHide", function(self)
+            if self.isBinding then
+                self.isBinding = false
+                self:EnableKeyboard(false)
+                self:UpdateText()
+                if parent.blocker then parent.blocker:Hide() end
+            end
+        end)
+
+        return btn
+    end
+
+    self.settingsFrame.castRow = CreateKeybindRow(self.settingsFrame, "Cast Fishing Key:", "CLICK FishingHelperMainButton:LeftButton", -40)
+    self.settingsFrame.stopRow = CreateKeybindRow(self.settingsFrame, "Stop Fishing Key:", "CLICK FishingHelperStopButton:LeftButton", -70)
+
+    -- Instruction text
+    local note = self.settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    note:SetPoint("BOTTOM", self.settingsFrame, "BOTTOM", 0, 15)
+    note:SetText("Press ESC to clear keybind. Close when finished.")
+
+    -- Hide by default upon creation
+    self.settingsFrame:Hide()
+end

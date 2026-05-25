@@ -126,6 +126,7 @@ function FH:SaveCurrentGear()
             self.db.savedGear[17] = GetInventoryItemLink("player", 17)
         end
         self:UpdateStopMacro()
+        self:UpdateMacro()
     end
 end
 
@@ -154,10 +155,14 @@ function FH:UpdateStopMacro()
     -- We can just hook the "OnClick" of stopButton securely, no, insecurely to restore autoloot, since we aren't in combat.
 
     self.UI.stopButton:SetAttribute("type", "macro")
+    self.UI.stopButton:SetAttribute("type*", "macro")
     if #lines > 0 then
-        self.UI.stopButton:SetAttribute("macrotext", table.concat(lines, "\n"))
+        local macrotext = table.concat(lines, "\n")
+        self.UI.stopButton:SetAttribute("macrotext", macrotext)
+        self.UI.stopButton:SetAttribute("macrotext*", macrotext)
     else
         self.UI.stopButton:SetAttribute("macrotext", "")
+        self.UI.stopButton:SetAttribute("macrotext*", "")
     end
 end
 
@@ -283,6 +288,13 @@ frame:SetScript("OnEvent", function(self, event, ...)
                     if currentItemID and currentItemID ~= 0 then
                         FH.db.savedGear[slotID] = nil
                     end
+                end
+            end
+
+            if slotID == 16 then
+                local currentItemID = GetInventoryItemID("player", 16)
+                if currentItemID ~= FH.db.outfit[16] then
+                    FH:RestoreAutoLoot()
                 end
             end
         end

@@ -10,6 +10,7 @@ Fishing Helper is a World of Warcraft (TBC) addon designed to simplify the fishi
 - **Quality-of-Life Sound**: Automatically increases the game's Master and SFX volume while you are actively channeling the Fishing spell, making it easier to hear the bobber splash. The volume is restored to its original level when you stop casting.
 - **Auto-Loot**: Automatically enables the game's Auto Loot feature when your fishing gear is equipped.
 - **Restore Previous State**: A convenient "Stop Fishing" button will unequip your fishing outfit, restore your previously equipped gear, and revert your Auto Loot setting.
+- **Minimap Keybindings Menu**: Right-click the minimap button to open a settings panel and configure your Cast Fishing and Stop Fishing keybinds directly. Supports keyboard keys, modifiers, mouse buttons (like Mouse Button 4/5), and the mouse scroll wheel.
 
 ## Slash Commands
 

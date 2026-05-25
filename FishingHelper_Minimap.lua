@@ -23,10 +23,28 @@ function FH.UI:CreateMinimapButton()
     btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
     btn:SetScript("OnClick", function(self, button)
-        if FH.UI.frame and FH.UI.frame:IsShown() then
-            FH.UI.frame:Hide()
-        elseif FH.UI.frame then
-            FH.UI.frame:Show()
+        if button == "RightButton" then
+            if not FH.UI.CreateSettingsFrame then return end
+            if not FH.UI.settingsFrame then
+                FH.UI:CreateSettingsFrame()
+            end
+            if FH.UI.settingsFrame:IsShown() then
+                FH.UI.settingsFrame:Hide()
+            else
+                if FH.UI.settingsFrame.castRow then
+                    FH.UI.settingsFrame.castRow:UpdateText()
+                end
+                if FH.UI.settingsFrame.stopRow then
+                    FH.UI.settingsFrame.stopRow:UpdateText()
+                end
+                FH.UI.settingsFrame:Show()
+            end
+        else
+            if FH.UI.frame and FH.UI.frame:IsShown() then
+                FH.UI.frame:Hide()
+            elseif FH.UI.frame then
+                FH.UI.frame:Show()
+            end
         end
     end)
 
@@ -34,6 +52,7 @@ function FH.UI:CreateMinimapButton()
         GameTooltip:SetOwner(self, "ANCHOR_LEFT")
         GameTooltip:AddLine("Fishing Helper")
         GameTooltip:AddLine("Left-Click to toggle UI.", 1, 1, 1)
+        GameTooltip:AddLine("Right-Click for Keybindings.", 1, 1, 1)
         GameTooltip:AddLine("Drag to move.", 1, 1, 1)
         GameTooltip:Show()
     end)
