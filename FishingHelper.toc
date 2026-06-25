@@ -1,9 +1,9 @@
-## Interface: 20505
+## Interface: 11508
 ## Title: Fishing Helper
 ## IconTexture: Interface\AddOns\FishingHelper\logo.png
 ## Notes: A helper addon for fishing. Manages your fishing outfit and lures.
 ## Author: Gemini
-## Version: 1.3.0
+## Version: 1.3.1
 ## SavedVariablesPerCharacter: FishingHelperDB
 
 FishingHelper.lua
