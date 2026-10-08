@@ -61,10 +61,12 @@ function FH.UI:ShowItemPopup(slotBtn, filterFunc, slotID, dbKey)
     local items = {}
     local seenIDs = {}
 
-    -- Scan bags
-    for bag = 0, 4 do
-        for slot = 1, C_Container.GetContainerNumSlots(bag) do
-            local itemID = C_Container.GetContainerItemID(bag, slot)
+    -- Scan bags (dynamic bag count for Classic and modern/Forever clients)
+    local numBags = (NUM_BAG_SLOTS or 4) + (NUM_REAGENTBAG_SLOTS or 0)
+    for bag = 0, numBags do
+        local numSlots = (C_Container and C_Container.GetContainerNumSlots and C_Container.GetContainerNumSlots(bag)) or 0
+        for slot = 1, numSlots do
+            local itemID = (C_Container and C_Container.GetContainerItemID and C_Container.GetContainerItemID(bag, slot))
             if itemID and not seenIDs[itemID] then
                 if filterFunc(itemID) then
                     table.insert(items, itemID)
@@ -76,8 +78,8 @@ function FH.UI:ShowItemPopup(slotBtn, filterFunc, slotID, dbKey)
 
     -- Sort by name
     table.sort(items, function(a, b)
-        local nameA = C_Item.GetItemInfo(a) or ""
-        local nameB = C_Item.GetItemInfo(b) or ""
+        local nameA = (C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(a)) or (C_Item and C_Item.GetItemInfo and C_Item.GetItemInfo(a)) or ""
+        local nameB = (C_Item and C_Item.GetItemNameByID and C_Item.GetItemNameByID(b)) or (C_Item and C_Item.GetItemInfo and C_Item.GetItemInfo(b)) or ""
         return nameA < nameB
     end)
 
@@ -138,12 +140,29 @@ function FH.UI:ShowItemPopup(slotBtn, filterFunc, slotID, dbKey)
             FH.UI.popup:Hide()
         end)
 
-        local itemName, _, itemQuality, _, _, _, _, _, _, itemTexture = C_Item.GetItemInfo(itemID)
-        btn.icon:SetTexture(itemTexture)
+        local itemName, _, itemQuality, _, _, _, _, _, _, itemTexture = C_Item and C_Item.GetItemInfo and C_Item.GetItemInfo(itemID)
+        if not itemTexture and C_Item and C_Item.GetItemInfoInstant then
+            local _, _, _, _, instantTex = C_Item.GetItemInfoInstant(itemID)
+            itemTexture = instantTex
+        end
+        if not itemName and C_Item and C_Item.GetItemNameByID then
+            itemName = C_Item.GetItemNameByID(itemID)
+        end
+        itemName = itemName or ("Item " .. itemID)
 
-        local r, g, b = C_Item.GetItemQualityColor(itemQuality or 1)
+        btn.icon:SetTexture(itemTexture or "Interface\\Icons\\INV_Misc_QuestionMark")
+
+        local r, g, b = 1, 1, 1
+        if itemQuality and ITEM_QUALITY_COLORS and ITEM_QUALITY_COLORS[itemQuality] then
+            r = ITEM_QUALITY_COLORS[itemQuality].r
+            g = ITEM_QUALITY_COLORS[itemQuality].g
+            b = ITEM_QUALITY_COLORS[itemQuality].b
+        elseif itemQuality and C_Item and C_Item.GetItemQualityColor then
+            local ok, qr, qg, qb = pcall(C_Item.GetItemQualityColor, itemQuality)
+            if ok and qr and qg and qb then r, g, b = qr, qg, qb end
+        end
+
         btn.name:SetText(itemName)
-
         btn.name:SetTextColor(r, g, b)
 
         btn:SetPoint("TOPLEFT", 0, yOffset)
@@ -160,7 +179,7 @@ function FH.UI:ShowItemPopup(slotBtn, filterFunc, slotID, dbKey)
     local screenHeight = UIParent:GetHeight()
     local btnX, btnY = slotBtn:GetCenter()
 
-    if btnX and btnY then
+    if btnX and btnY and screenWidth and screenHeight then
         local isRight = btnX > (screenWidth / 2)
         local isTop = btnY > (screenHeight / 2)
 

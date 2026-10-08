@@ -2,8 +2,11 @@ local addonName, addonTable = ...
 local FH = {}
 addonTable[1] = FH
 _G["FishingHelper"] = FH
+
+_G["BINDING_HEADER_FISHINGHELPER"] = "Fishing Helper"
 _G["BINDING_NAME_CLICK FishingHelperMainButton:LeftButton"] = "Cast Fishing"
 _G["BINDING_NAME_CLICK FishingHelperStopButton:LeftButton"] = "Stop Fishing"
+
 -- Default database
 local defaultDB = {
     framePosition = { point = "CENTER", relativePoint = "CENTER", xOfs = 0, yOfs = 0 },
@@ -18,10 +21,145 @@ local defaultDB = {
     minimapPos = 45 -- Minimap button angle in degrees
 }
 
+-- Known Fishing Spell IDs across WoW versions (Classic, TBC, Retail, WoW Forever)
+local FISHING_SPELL_IDS = {
+    [7620] = true,
+    [7731] = true,
+    [7732] = true,
+    [18248] = true,
+    [33095] = true,
+    [131474] = true,
+    [131476] = true,
+}
+
+local function GetSpellDetails(spellIDOrName)
+    if not spellIDOrName then return nil, nil end
+    local name, icon
+
+    if type(spellIDOrName) == "number" then
+        if C_Spell and C_Spell.GetSpellInfo then
+            local info = C_Spell.GetSpellInfo(spellIDOrName)
+            if info then
+                name = info.name
+                icon = info.iconID or info.originalIconID
+            end
+        end
+        if not name and _G.GetSpellInfo then
+            local n, _, i = _G.GetSpellInfo(spellIDOrName)
+            name = n
+            icon = i
+        end
+    elseif type(spellIDOrName) == "string" then
+        if _G.GetSpellInfo then
+            local n, _, i = _G.GetSpellInfo(spellIDOrName)
+            name = n or spellIDOrName
+            icon = i
+        else
+            -- Modern client (WoW Forever / 11.0+) where GetSpellInfo requires numeric ID
+            if spellIDOrName == "Fishing" then
+                return GetSpellDetails(7620)
+            end
+            name = spellIDOrName
+        end
+    end
+
+    return name, icon
+end
+
+-- Global shim for GetSpellInfo if nil on modern clients
+if _G.GetSpellInfo == nil then
+    _G.GetSpellInfo = function(spell)
+        local name, icon = GetSpellDetails(spell)
+        if name then
+            return name, nil, icon
+        end
+        return nil
+    end
+end
+
+local function IsFishingSpellCast(unit, ...)
+    if unit ~= "player" then return false end
+    for i = 1, select("#", ...) do
+        local val = select(i, ...)
+        if type(val) == "number" and FISHING_SPELL_IDS[val] then
+            return true
+        end
+        if type(val) == "number" then
+            local name = GetSpellDetails(val)
+            if name and (name == "Fishing" or name:lower():find("fishing")) then
+                return true
+            end
+        elseif type(val) == "string" and (val == "Fishing" or val:lower():find("fishing")) then
+            return true
+        end
+    end
+    return false
+end
+
+local function IsLureSpellCast(unit, ...)
+    if unit ~= "player" or not FH.db or not FH.db.lureID then return false end
+    local lureID = FH.db.lureID
+    local lureName = C_Item and C_Item.GetItemInfo and C_Item.GetItemInfo(lureID)
+    if not lureName and C_Item and C_Item.GetItemNameByID then
+        lureName = C_Item.GetItemNameByID(lureID)
+    end
+    if not lureName then return false end
+
+    for i = 1, select("#", ...) do
+        local val = select(i, ...)
+        if type(val) == "number" then
+            local name = GetSpellDetails(val)
+            if name and name == lureName then
+                return true
+            end
+        elseif type(val) == "string" and val == lureName then
+            return true
+        end
+    end
+    return false
+end
+
+local function GetItemNameOrID(itemIDOrLink)
+    if not itemIDOrLink then return nil end
+    local name = C_Item and C_Item.GetItemInfo and C_Item.GetItemInfo(itemIDOrLink)
+    if not name and C_Item and C_Item.GetItemNameByID and type(itemIDOrLink) == "number" then
+        name = C_Item.GetItemNameByID(itemIDOrLink)
+    end
+    if not name and _G.GetItemInfo then
+        name = _G.GetItemInfo(itemIDOrLink)
+    end
+    if not name and type(itemIDOrLink) == "number" then
+        if C_Item and C_Item.RequestLoadItemDataByID then
+            C_Item.RequestLoadItemDataByID(itemIDOrLink)
+        end
+        return "item:" .. itemIDOrLink
+    end
+    return name or itemIDOrLink
+end
+
+local function GetItemIconSafe(itemID)
+    if not itemID then return nil end
+    local icon
+    if C_Item and C_Item.GetItemIconByID then
+        icon = C_Item.GetItemIconByID(itemID)
+    end
+    if not icon and C_Item and C_Item.GetItemInfoInstant then
+        local _, _, _, _, instantIcon = C_Item.GetItemInfoInstant(itemID)
+        icon = instantIcon
+    end
+    if not icon and _G.GetItemIcon then
+        icon = _G.GetItemIcon(itemID)
+    end
+    return icon
+end
+
 local frame = CreateFrame("Frame")
 frame:RegisterEvent("ADDON_LOADED")
+frame:RegisterEvent("PLAYER_LOGIN")
+frame:RegisterEvent("PLAYER_ENTERING_WORLD")
 frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 frame:RegisterEvent("BAG_UPDATE")
+frame:RegisterEvent("BAG_UPDATE_DELAYED")
 frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
 frame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
 frame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
@@ -33,14 +171,77 @@ frame:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
 
 -- Slash command
 SLASH_FISHINGHELPER1 = "/fh"
+SLASH_FISHINGHELPER2 = "/fishinghelper"
 function SlashCmdList.FISHINGHELPER(msg, editbox)
-    if FH.UI and FH.UI.frame then
-        if FH.UI.frame:IsShown() then
-            FH.UI.frame:Hide()
-        else
-            FH.UI.frame:Show()
+    msg = (msg or ""):match("^%s*(.-)%s*$"):lower()
+    if msg == "minimap" or msg == "reset" then
+        if FH.db then FH.db.minimapPos = 45 end
+        if FH.UI and FH.UI.CreateMinimapButton then
+            FH.UI:CreateMinimapButton()
+        end
+        if FH.UI and FH.UI.UpdateMinimapButton then
+            FH.UI:UpdateMinimapButton()
+        end
+        print("|cFF00FF00FishingHelper|r: Minimap button position reset to default (45°).")
+    elseif msg == "bind" or msg == "keybind" or msg == "settings" then
+        if FH.UI and FH.UI.CreateSettingsFrame then
+            if not FH.UI.settingsFrame then FH.UI:CreateSettingsFrame() end
+            if FH.UI.settingsFrame:IsShown() then
+                FH.UI.settingsFrame:Hide()
+            else
+                FH.UI.settingsFrame:Show()
+            end
+        end
+    else
+        if FH.UI and FH.UI.frame then
+            if FH.UI.frame:IsShown() then
+                FH.UI.frame:Hide()
+            else
+                FH.UI.frame:Show()
+            end
         end
     end
+end
+
+-- Addon Compartment Callbacks for WoW Forever
+function FishingHelper_OnAddonCompartmentClick(addonName, buttonName)
+    if buttonName == "RightButton" then
+        if not FH.UI.CreateSettingsFrame then return end
+        if not FH.UI.settingsFrame then
+            FH.UI:CreateSettingsFrame()
+        end
+        if FH.UI.settingsFrame:IsShown() then
+            FH.UI.settingsFrame:Hide()
+        else
+            if FH.UI.settingsFrame.castRow then
+                FH.UI.settingsFrame.castRow:UpdateText()
+            end
+            if FH.UI.settingsFrame.stopRow then
+                FH.UI.settingsFrame.stopRow:UpdateText()
+            end
+            FH.UI.settingsFrame:Show()
+        end
+    else
+        if FH.UI and FH.UI.frame then
+            if FH.UI.frame:IsShown() then
+                FH.UI.frame:Hide()
+            else
+                FH.UI.frame:Show()
+            end
+        end
+    end
+end
+
+function FishingHelper_OnAddonCompartmentEnter(addonName, button)
+    GameTooltip:SetOwner(button, "ANCHOR_LEFT")
+    GameTooltip:AddLine("Fishing Helper")
+    GameTooltip:AddLine("Left-Click to toggle UI.", 1, 1, 1)
+    GameTooltip:AddLine("Right-Click for Keybindings.", 1, 1, 1)
+    GameTooltip:Show()
+end
+
+function FishingHelper_OnAddonCompartmentLeave(addonName, button)
+    GameTooltip:Hide()
 end
 
 function FH:Initialize()
@@ -134,7 +335,6 @@ function FH:UpdateStopMacro()
     if InCombatLockdown() or not self.UI or not self.UI.stopButton then return end
 
     local lines = {}
-    -- Restore offhand AFTER mainhand, so sort it (16 comes before 17)
     local sortedSlots = {}
     for slot, link in pairs(self.db.savedGear) do
         table.insert(sortedSlots, slot)
@@ -144,15 +344,12 @@ function FH:UpdateStopMacro()
     for _, slot in ipairs(sortedSlots) do
         local link = self.db.savedGear[slot]
         if link then
-            local name = C_Item.GetItemInfo(link)
+            local name = GetItemNameOrID(link)
             if name then
                 table.insert(lines, "/equipslot " .. slot .. " " .. name)
             end
         end
     end
-
-    -- When stopping fishing, run a macro to equip old gear, AND a secure snippet or lua to restore AutoLoot.
-    -- We can just hook the "OnClick" of stopButton securely, no, insecurely to restore autoloot, since we aren't in combat.
 
     self.UI.stopButton:SetAttribute("type", "macro")
     self.UI.stopButton:SetAttribute("type*", "macro")
@@ -182,7 +379,7 @@ function FH:UpdateMacro()
             local equippedID = GetInventoryItemID("player", slot)
             if equippedID ~= itemID then
                 needEquip = true
-                local name = C_Item.GetItemInfo(itemID)
+                local name = GetItemNameOrID(itemID)
                 if name then
                     table.insert(itemsToEquip, "/equipslot " .. slot .. " " .. name)
                     if not tooltipItem then tooltipItem = name end
@@ -193,9 +390,13 @@ function FH:UpdateMacro()
 
     local function ApplyMacro(macroStr, icon, tooltip)
         self.UI.mainButton:SetAttribute("type", "macro")
+        self.UI.mainButton:SetAttribute("type*", "macro")
         self.UI.mainButton:SetAttribute("macrotext", macroStr)
+        self.UI.mainButton:SetAttribute("macrotext*", macroStr)
         if self.UI.mainButton.icon then
             self.UI.mainButton.icon:SetTexture(icon)
+        elseif self.UI.mainButton.SetItemButtonTexture then
+            self.UI.mainButton:SetItemButtonTexture(icon)
         end
 
         local idx = GetMacroIndexByName("FishHelper")
@@ -232,22 +433,34 @@ function FH:UpdateMacro()
     local lureID = self.db.lureID
     local recentlySucceeded = self.lastLureSuccess and (GetTime() - self.lastLureSuccess < 2.0)
     if lureID and anyOutfitConfigured and not self.isApplyingLure and not recentlySucceeded then
-        local name = C_Item.GetItemInfo(lureID)
-        if name and C_Item.GetItemCount(lureID) > 0 then
-            local hasMainHandEnchant, mainHandExpiration = GetWeaponEnchantInfo()
+        local name = GetItemNameOrID(lureID)
+        local itemCount = C_Item and C_Item.GetItemCount and C_Item.GetItemCount(lureID) or (GetItemCount and GetItemCount(lureID)) or 0
+        if name and itemCount > 0 then
+            local hasMainHandEnchant, mainHandExpiration
+            if C_PaperDollInfo and C_PaperDollInfo.GetTemporaryEnchantmentInfo then
+                local mh = C_PaperDollInfo.GetTemporaryEnchantmentInfo(INVSLOT_MAINHAND or 16)
+                if mh then
+                    hasMainHandEnchant = true
+                    mainHandExpiration = mh.remainingTimeMs
+                end
+            elseif GetWeaponEnchantInfo then
+                hasMainHandEnchant, mainHandExpiration = GetWeaponEnchantInfo()
+            end
+
             if not hasMainHandEnchant or (mainHandExpiration and mainHandExpiration < 20000) then
                 local macroStr = "/use " .. name .. "\n/use 16"
-                ApplyMacro(macroStr, C_Item.GetItemIconByID(lureID), name)
+                local lureIcon = GetItemIconSafe(lureID) or "Interface\\Icons\\INV_Misc_QuestionMark"
+                ApplyMacro(macroStr, lureIcon, name)
                 return
             end
         end
     end
 
     -- Ready to fish
-    ---@diagnostic disable-next-line: undefined-global
-    local _, _, icon = GetSpellInfo("Fishing")
+    local fishSpellName, icon = GetSpellDetails(7620)
+    fishSpellName = fishSpellName or "Fishing"
     if not icon then icon = "Interface\\Icons\\Trade_Fishing" end
-    ApplyMacro("/cast Fishing", icon, "Fishing")
+    ApplyMacro("/cast " .. fishSpellName, icon, fishSpellName)
 end
 
 frame:SetScript("OnEvent", function(self, event, ...)
@@ -269,6 +482,16 @@ frame:SetScript("OnEvent", function(self, event, ...)
                 end)
             end
         end
+    elseif event == "PLAYER_LOGIN" or event == "PLAYER_ENTERING_WORLD" then
+        if FH.UI and FH.UI.CreateMinimapButton then
+            FH.UI:CreateMinimapButton()
+        end
+        if FH.UI and FH.UI.UpdateMinimapButton then
+            FH.UI:UpdateMinimapButton()
+        end
+        if event == "PLAYER_LOGIN" then
+            self:UnregisterEvent("PLAYER_LOGIN")
+        end
     elseif event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_EQUIPMENT_CHANGED" then
         if event == "PLAYER_EQUIPMENT_CHANGED" then
             local slotID = ...
@@ -284,7 +507,6 @@ frame:SetScript("OnEvent", function(self, event, ...)
                     end
                 else
                     -- No fishing item configured for this slot, but we have something saved (e.g. slot 17)
-                    -- If the slot is no longer empty, it's a manual change.
                     if currentItemID and currentItemID ~= 0 then
                         FH.db.savedGear[slotID] = nil
                     end
@@ -303,74 +525,42 @@ frame:SetScript("OnEvent", function(self, event, ...)
             FH:UpdateMacro()
             FH:UpdateStopMacro()
         end
-    elseif event == "BAG_UPDATE" then
+    elseif event == "BAG_UPDATE" or event == "BAG_UPDATE_DELAYED" then
         if FH.UI and FH.UI.UpdateLureCount then
             FH.UI:UpdateLureCount()
         end
     elseif event == "UNIT_SPELLCAST_CHANNEL_START" then
-        local unitTarget, _, spellID = ...
-        if unitTarget == "player" then
-            ---@diagnostic disable-next-line: undefined-global
-            local name = GetSpellInfo(spellID)
-            if name == "Fishing" then
-                FH.isChannelingFishing = true
-                FH:EnhanceVolume()
-            end
+        local unitTarget = ...
+        if unitTarget == "player" and IsFishingSpellCast(unitTarget, select(2, ...)) then
+            FH.isChannelingFishing = true
+            FH:EnhanceVolume()
         end
     elseif event == "UNIT_SPELLCAST_CHANNEL_STOP" then
-        local unitTarget, _, spellID = ...
-        if unitTarget == "player" then
-            ---@diagnostic disable-next-line: undefined-global
-            local name = GetSpellInfo(spellID)
-            if name == "Fishing" then
-                FH.isChannelingFishing = false
-                C_Timer.After(1, function()
-                    if not FH.isChannelingFishing then
-                        FH:RestoreVolume()
-                    end
-                end)
-            end
+        local unitTarget = ...
+        if unitTarget == "player" and (FH.isChannelingFishing or IsFishingSpellCast(unitTarget, select(2, ...))) then
+            FH.isChannelingFishing = false
+            C_Timer.After(1, function()
+                if not FH.isChannelingFishing then
+                    FH:RestoreVolume()
+                end
+            end)
         end
     elseif event == "UNIT_SPELLCAST_START" then
-        local unitTarget, _, spellID = ...
-        if unitTarget == "player" then
-            ---@diagnostic disable-next-line: undefined-global
-            local spellName = GetSpellInfo(spellID)
-            local lureID = FH.db.lureID
-            if lureID then
-                local lureName = C_Item.GetItemInfo(lureID)
-                if spellName == lureName then
-                    FH.isApplyingLure = true
-                    FH.lastLureSuccess = nil
-                    FH:UpdateMacro()
-                end
-            end
+        local unitTarget = ...
+        if unitTarget == "player" and IsLureSpellCast(unitTarget, select(2, ...)) then
+            FH.isApplyingLure = true
+            FH.lastLureSuccess = nil
+            FH:UpdateMacro()
         end
     elseif event == "UNIT_SPELLCAST_SUCCEEDED" then
-        local unitTarget, _, spellID = ...
-        if unitTarget == "player" then
-            ---@diagnostic disable-next-line: undefined-global
-            local spellName = GetSpellInfo(spellID)
-            local lureID = FH.db.lureID
-            if lureID then
-                local lureName = C_Item.GetItemInfo(lureID)
-                if spellName == lureName then
-                    FH.lastLureSuccess = GetTime()
-                end
-            end
+        local unitTarget = ...
+        if unitTarget == "player" and IsLureSpellCast(unitTarget, select(2, ...)) then
+            FH.lastLureSuccess = GetTime()
         end
     elseif event == "UNIT_SPELLCAST_FAILED" or event == "UNIT_SPELLCAST_INTERRUPTED" then
-        local unitTarget, _, spellID = ...
-        if unitTarget == "player" then
-            ---@diagnostic disable-next-line: undefined-global
-            local spellName = GetSpellInfo(spellID)
-            local lureID = FH.db.lureID
-            if lureID then
-                local lureName = C_Item.GetItemInfo(lureID)
-                if spellName == lureName then
-                    FH.lastLureSuccess = nil
-                end
-            end
+        local unitTarget = ...
+        if unitTarget == "player" and IsLureSpellCast(unitTarget, select(2, ...)) then
+            FH.lastLureSuccess = nil
         end
     elseif event == "UNIT_SPELLCAST_STOP" then
         local unitTarget = ...

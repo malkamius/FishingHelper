@@ -2,9 +2,112 @@ local addonName, addonTable = ...
 local FH = addonTable[1]
 FH.UI = FH.UI or {}
 
+local function SetButtonTexture(btn, texture)
+    if btn.SetItemButtonTexture then
+        btn:SetItemButtonTexture(texture)
+    elseif _G.SetItemButtonTexture then
+        _G.SetItemButtonTexture(btn, texture)
+    end
+    local texObj = btn.icon or _G[btn:GetName() .. "IconTexture"]
+    if texObj and texObj.SetTexture then
+        texObj:SetTexture(texture)
+    end
+end
+
+local function ClearButtonTexture(btn)
+    if btn.SetItemButtonTexture then
+        btn:SetItemButtonTexture(nil)
+    elseif _G.SetItemButtonTexture then
+        _G.SetItemButtonTexture(btn, nil)
+    end
+    local texObj = btn.icon or _G[btn:GetName() .. "IconTexture"]
+    if texObj and texObj.SetTexture then
+        texObj:SetTexture(nil)
+    end
+end
+
+local function GetItemEquipLoc(itemID)
+    if not itemID then return nil end
+    if C_Item and C_Item.GetItemInfoInstant then
+        local _, _, _, loc = C_Item.GetItemInfoInstant(itemID)
+        if loc then return loc end
+    end
+    if C_Item and C_Item.GetItemInfo then
+        local _, _, _, _, _, _, _, _, loc = C_Item.GetItemInfo(itemID)
+        if loc then return loc end
+    end
+    return nil
+end
+
+local validPoles = {
+    [19970] = true, -- Arcanite Fishing Pole
+    [25978] = true, -- Seth's Graphite Fishing Pole
+    [6367]  = true, -- Big Iron Fishing Pole
+    [19022] = true, -- Nat Pagle's Extreme Angler FC-5000
+    [4598]  = true, -- Goblin fishing pole
+    [6365]  = true, -- Strong Fishing Pole
+    [6366]  = true, -- Darkwood Fishing Pole
+    [6256]  = true, -- Fishing Pole
+    [12225] = true, -- Blump Family Fishing Pole
+}
+
+local function IsFishingPole(itemID)
+    if not itemID then return false end
+    if validPoles[itemID] then return true end
+    if C_Item and C_Item.GetItemInfoInstant then
+        local _, _, _, itemEquipLoc, _, classID, subclassID = C_Item.GetItemInfoInstant(itemID)
+        if itemEquipLoc == "INVTYPE_FISHINGPOLE" then return true end
+        if classID == 2 and subclassID == 20 then return true end
+    end
+    if C_Item and C_Item.GetItemInfo then
+        local _, _, _, _, _, _, itemSubType, _, itemEquipLoc = C_Item.GetItemInfo(itemID)
+        if itemEquipLoc == "INVTYPE_FISHINGPOLE" then return true end
+        if itemSubType == "Fishing Pole" or itemSubType == "Fishing Poles" then return true end
+    end
+    return false
+end
+
+local validLures = {
+    [6533]   = true, -- Aquadynamic Fish Attractor
+    [34861]  = true, -- Sharpened Fish Hook
+    [7307]   = true, -- Flesh Eating Worm
+    [6811]   = true, -- Aquadynamic Fish Lens
+    [6532]   = true, -- Bright Baubles
+    [6530]   = true, -- Nightcrawlers
+    [6529]   = true, -- Shiny Bauble
+    [6522]   = true, -- Shiny Bauble
+    [268880] = true, -- "Secret" Bait (WoW Forever)
+}
+
+local function IsFishingLure(itemID)
+    if not itemID then return false end
+    return validLures[itemID] or false
+end
+
 local function CreateItemSlot(parent, name, size, labelText, dbKey, slotID)
-    local btn = CreateFrame("Button", name, parent, "ItemButtonTemplate")
+    local btn = CreateFrame("Button", name, parent)
     btn:SetSize(size, size)
+
+    -- Background / Icon texture
+    btn.icon = btn:CreateTexture(name .. "IconTexture", "BACKGROUND")
+    btn.icon:SetAllPoints()
+
+    -- Standard item slot border textures
+    local normalTex = btn:CreateTexture(nil, "BORDER")
+    normalTex:SetAllPoints()
+    normalTex:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+    btn:SetNormalTexture(normalTex)
+
+    local pushedTex = btn:CreateTexture(nil, "ARTWORK")
+    pushedTex:SetAllPoints()
+    pushedTex:SetTexture("Interface\\Buttons\\UI-Quickslot-Depress")
+    btn:SetPushedTexture(pushedTex)
+
+    local highlightTex = btn:CreateTexture(nil, "HIGHLIGHT")
+    highlightTex:SetAllPoints()
+    highlightTex:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+    highlightTex:SetBlendMode("ADD")
+    btn:SetHighlightTexture(highlightTex)
 
     -- Label
     btn.label = btn:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -21,10 +124,17 @@ local function CreateItemSlot(parent, name, size, labelText, dbKey, slotID)
         end
 
         if currentID then
-            local icon = C_Item.GetItemIconByID(currentID)
-            SetItemButtonTexture(self, icon)
+            local icon = C_Item and C_Item.GetItemIconByID and C_Item.GetItemIconByID(currentID)
+            if not icon and C_Item and C_Item.GetItemInfoInstant then
+                local _, _, _, _, instantIcon = C_Item.GetItemInfoInstant(currentID)
+                icon = instantIcon
+            end
+            if not icon and _G.GetItemIcon then
+                icon = _G.GetItemIcon(currentID)
+            end
+            SetButtonTexture(self, icon)
         else
-            SetItemButtonTexture(self, nil)
+            ClearButtonTexture(self)
         end
     end
 
@@ -32,6 +142,13 @@ local function CreateItemSlot(parent, name, size, labelText, dbKey, slotID)
     btn:SetScript("OnReceiveDrag", function(self)
         local infoType, itemID, itemLink = GetCursorInfo()
         if infoType == "item" then
+            if type(itemID) ~= "number" then
+                if itemLink and C_Item and C_Item.GetItemInfoInstant then
+                    itemID = C_Item.GetItemInfoInstant(itemLink)
+                elseif tonumber(itemID) then
+                    itemID = tonumber(itemID)
+                end
+            end
             if slotID then
                 FH.db.outfit[slotID] = itemID
             else
@@ -43,6 +160,7 @@ local function CreateItemSlot(parent, name, size, labelText, dbKey, slotID)
             if FH.UI and FH.UI.UpdateLureCount then FH.UI:UpdateLureCount() end
         end
     end)
+
     btn:SetScript("OnClick", function(self, button)
         if button == "RightButton" then
             if slotID then
@@ -57,55 +175,29 @@ local function CreateItemSlot(parent, name, size, labelText, dbKey, slotID)
             -- If cursor has item, act like receive drag
             local infoType = GetCursorInfo()
             if infoType == "item" then
-                self:GetScript("OnReceiveDrag")(self)
+                local dragHandler = self:GetScript("OnReceiveDrag")
+                if dragHandler then dragHandler(self) end
             else
                 -- Clicked without item, show popup
                 if FH.UI and FH.UI.ShowItemPopup then
                     local filter
                     if slotID == 16 then
-                        filter = function(itemID)
-                            local validPoles = {
-                                [19970] = true, -- Arcanite Fishing Pole
-                                [25978] = true, -- Seth's Graphite Fishing Pole
-                                [6367]  = true, -- Big Iron Fishing Pole
-                                [19022] = true, -- Nat Pagle's Extreme Angler FC-5000
-                                [4598]  = true, -- Goblin fishing pole
-                                [6365]  = true, -- Strong Fishing Pole
-                                [6366]  = true, -- Darkwood Fishing Pole
-                                [6256]  = true, -- Fishing Pole
-                                [12225] = true, -- Blump Family Fishing Pole
-                            }
-                            return validPoles[itemID] or false
-                        end
+                        filter = IsFishingPole
                     elseif slotID == 1 then
                         filter = function(itemID)
-                            local _, _, _, _, _, _, _, _, itemEquipLoc = C_Item.GetItemInfo(itemID)
-                            return itemEquipLoc == "INVTYPE_HEAD"
+                            return GetItemEquipLoc(itemID) == "INVTYPE_HEAD"
                         end
                     elseif slotID == 10 then
                         filter = function(itemID)
-                            local _, _, _, _, _, _, _, _, itemEquipLoc = C_Item.GetItemInfo(itemID)
-                            return itemEquipLoc == "INVTYPE_HAND"
+                            local loc = GetItemEquipLoc(itemID)
+                            return loc == "INVTYPE_HAND" or loc == "INVTYPE_HANDS"
                         end
                     elseif slotID == 8 then
                         filter = function(itemID)
-                            local _, _, _, _, _, _, _, _, itemEquipLoc = C_Item.GetItemInfo(itemID)
-                            return itemEquipLoc == "INVTYPE_FEET"
+                            return GetItemEquipLoc(itemID) == "INVTYPE_FEET"
                         end
                     elseif dbKey == "lureID" then
-                        filter = function(itemID)
-                            local validLures = {
-                                [6533] = true,  -- Aquadynamic Fish Attractor
-                                [34861] = true, -- Sharpened Fish Hook
-                                [7307] = true,  -- Flesh Eating Worm
-                                [6811] = true,  -- Aquadynamic Fish Lens
-                                [6532] = true,  -- Bright Baubles
-                                [6530] = true,  -- Nightcrawlers / Bright Baubles
-                                [6529] = true,  -- Shiny Bauble / Nightcrawlers
-                                [6522] = true,  -- Shiny Bauble
-                            }
-                            return validLures[itemID] or false
-                        end
+                        filter = IsFishingLure
                     end
 
                     if filter then
@@ -145,7 +237,8 @@ function FH.UI:Initialize()
 
     self.frame.title = self.frame:CreateFontString(nil, "OVERLAY")
     self.frame.title:SetFontObject("GameFontHighlight")
-    self.frame.title:SetPoint("LEFT", self.frame.TitleBg, "LEFT", 5, 0)
+    local titleAnchor = self.frame.TitleBg or self.frame.TitleContainer or self.frame
+    self.frame.title:SetPoint("LEFT", titleAnchor, "LEFT", 5, 0)
     self.frame.title:SetText("Fishing Helper")
 
     self.frame:SetMovable(true)
@@ -159,19 +252,32 @@ function FH.UI:Initialize()
     end)
 
     -- Main Action Button (Secure)
-    self.mainButton = CreateFrame("Button", "FishingHelperMainButton", self.frame,
-        "ItemButtonTemplate, SecureActionButtonTemplate")
+    self.mainButton = CreateFrame("Button", "FishingHelperMainButton", self.frame, "SecureActionButtonTemplate")
     self.mainButton:SetSize(40, 40)
     self.mainButton:SetPoint("TOPLEFT", self.frame, "TOPLEFT", 15, -35)
     self.mainButton:RegisterForClicks("AnyDown")
     self.mainButton:SetAttribute("type", "macro")
+    self.mainButton:SetAttribute("type*", "macro")
 
-    self.mainButton.icon = _G["FishingHelperMainButtonIconTexture"]
-    if not self.mainButton.icon then
-        self.mainButton.icon = self.mainButton:CreateTexture(nil, "BACKGROUND")
-        self.mainButton.icon:SetAllPoints()
-    end
+    self.mainButton.icon = _G["FishingHelperMainButtonIconTexture"] or self.mainButton:CreateTexture("FishingHelperMainButtonIconTexture", "BACKGROUND")
+    self.mainButton.icon:SetAllPoints()
     self.mainButton.icon:SetTexture("Interface\\Icons\\Trade_Fishing")
+
+    local normalTex = self.mainButton:CreateTexture(nil, "BORDER")
+    normalTex:SetAllPoints()
+    normalTex:SetTexture("Interface\\Buttons\\UI-Quickslot2")
+    self.mainButton:SetNormalTexture(normalTex)
+
+    local pushedTex = self.mainButton:CreateTexture(nil, "ARTWORK")
+    pushedTex:SetAllPoints()
+    pushedTex:SetTexture("Interface\\Buttons\\UI-Quickslot-Depress")
+    self.mainButton:SetPushedTexture(pushedTex)
+
+    local highlightTex = self.mainButton:CreateTexture(nil, "HIGHLIGHT")
+    highlightTex:SetAllPoints()
+    highlightTex:SetTexture("Interface\\Buttons\\ButtonHilight-Square")
+    highlightTex:SetBlendMode("ADD")
+    self.mainButton:SetHighlightTexture(highlightTex)
 
     self.mainButton:RegisterForDrag("LeftButton")
     self.mainButton:SetScript("OnDragStart", function(self)
@@ -210,15 +316,17 @@ function FH.UI:Initialize()
     self.stopButton = CreateFrame("Button", "FishingHelperStopButton", self.frame, "SecureActionButtonTemplate")
     self.stopButton:SetSize(100, 22)
     self.stopButton:SetPoint("BOTTOM", self.frame, "BOTTOM", 0, 10)
-    self.stopButton:RegisterForClicks("AnyDown")
+    self.stopButton:RegisterForClicks("AnyDown", "AnyUp")
 
-    -- Manually set up visual elements for stopButton
     self.stopButton:SetNormalTexture("Interface\\Buttons\\UI-Panel-Button-Up")
-    self.stopButton:GetNormalTexture():SetTexCoord(0, 0.625, 0, 0.6875)
+    local nt = self.stopButton:GetNormalTexture()
+    if nt then nt:SetTexCoord(0, 0.625, 0, 0.6875) end
     self.stopButton:SetPushedTexture("Interface\\Buttons\\UI-Panel-Button-Down")
-    self.stopButton:GetPushedTexture():SetTexCoord(0, 0.625, 0, 0.6875)
+    local pt = self.stopButton:GetPushedTexture()
+    if pt then pt:SetTexCoord(0, 0.625, 0, 0.6875) end
     self.stopButton:SetHighlightTexture("Interface\\Buttons\\UI-Panel-Button-Highlight", "ADD")
-    self.stopButton:GetHighlightTexture():SetTexCoord(0, 0.625, 0, 0.6875)
+    local ht = self.stopButton:GetHighlightTexture()
+    if ht then ht:SetTexCoord(0, 0.625, 0, 0.6875) end
 
     local stopText = self.stopButton:CreateFontString(nil, "OVERLAY", "GameFontNormal")
     stopText:SetPoint("CENTER", 0, 1)
@@ -276,7 +384,7 @@ function FH.UI:UpdateLureCount()
     local countStr = ""
     local lureID = FH.db.lureID
     if lureID then
-        local count = C_Item.GetItemCount(lureID)
+        local count = (C_Item and C_Item.GetItemCount and C_Item.GetItemCount(lureID)) or (GetItemCount and GetItemCount(lureID)) or 0
         if count > 0 then
             countStr = tostring(count)
         else
@@ -295,7 +403,8 @@ function FH.UI:CreateSettingsFrame()
 
     self.settingsFrame.title = self.settingsFrame:CreateFontString(nil, "OVERLAY")
     self.settingsFrame.title:SetFontObject("GameFontHighlight")
-    self.settingsFrame.title:SetPoint("LEFT", self.settingsFrame.TitleBg, "LEFT", 5, 0)
+    local settingsTitleAnchor = self.settingsFrame.TitleBg or self.settingsFrame.TitleContainer or self.settingsFrame
+    self.settingsFrame.title:SetPoint("LEFT", settingsTitleAnchor, "LEFT", 5, 0)
     self.settingsFrame.title:SetText("Fishing Helper Settings")
 
     self.settingsFrame:SetMovable(true)
@@ -370,6 +479,12 @@ function FH.UI:CreateSettingsFrame()
             end
         end
 
+        local function SaveKeyBindings()
+            local set = GetCurrentBindingSet and GetCurrentBindingSet() or 1
+            if set ~= 1 and set ~= 2 then set = 1 end
+            if SaveBindings then SaveBindings(set) end
+        end
+
         btn:UpdateText()
         btn.isBinding = false
 
@@ -402,7 +517,7 @@ function FH.UI:CreateSettingsFrame()
                     if key2 then SetBinding(key2, nil) end
 
                     SetBinding(finalKey, command)
-                    SaveBindings(GetCurrentBindingSet())
+                    SaveKeyBindings()
 
                     self:UpdateText()
                     if parent.blocker then parent.blocker:Hide() end
@@ -441,7 +556,7 @@ function FH.UI:CreateSettingsFrame()
                 local key1, key2 = GetBindingKey(command)
                 if key1 then SetBinding(key1, nil) end
                 if key2 then SetBinding(key2, nil) end
-                SaveBindings(GetCurrentBindingSet())
+                SaveKeyBindings()
                 self:UpdateText()
                 if parent.blocker then parent.blocker:Hide() end
                 return
@@ -460,7 +575,7 @@ function FH.UI:CreateSettingsFrame()
             if key2 then SetBinding(key2, nil) end
 
             SetBinding(finalKey, command)
-            SaveBindings(GetCurrentBindingSet())
+            SaveKeyBindings()
 
             self:UpdateText()
             if parent.blocker then parent.blocker:Hide() end
@@ -486,7 +601,7 @@ function FH.UI:CreateSettingsFrame()
             if key2 then SetBinding(key2, nil) end
 
             SetBinding(finalKey, command)
-            SaveBindings(GetCurrentBindingSet())
+            SaveKeyBindings()
 
             self:UpdateText()
             if parent.blocker then parent.blocker:Hide() end
