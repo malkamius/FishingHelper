@@ -33,9 +33,30 @@ $wowPathsFile = Join-Path $RepoRoot "wow_paths.json"
 $wowAddonsPath = $null
 
 if (Test-Path $wowPathsFile) {
-    $config = Get-Content $wowPathsFile -Raw | ConvertFrom-Json
-    if ($config.wowAddonPath -and (Test-Path $config.wowAddonPath)) {
-        $wowAddonsPath = $config.wowAddonPath
+    try {
+        $config = Get-Content $wowPathsFile -Raw | ConvertFrom-Json
+        if ($config.wowAddonPaths) {
+            foreach ($p in $config.wowAddonPaths) {
+                if (Test-Path $p) {
+                    $wowAddonsPath = $p
+                    break
+                }
+            }
+        }
+        if (-not $wowAddonsPath -and $config.wowAddonPath) {
+            if ($config.wowAddonPath -is [array]) {
+                foreach ($p in $config.wowAddonPath) {
+                    if (Test-Path $p) {
+                        $wowAddonsPath = $p
+                        break
+                    }
+                }
+            } elseif (Test-Path $config.wowAddonPath) {
+                $wowAddonsPath = $config.wowAddonPath
+            }
+        }
+    } catch {
+        Write-Host "Warning: Could not parse wow_paths.json: $_" -ForegroundColor Yellow
     }
 }
 
