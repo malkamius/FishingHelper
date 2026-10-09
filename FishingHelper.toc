@@ -3,7 +3,7 @@
 ## IconTexture: Interface\AddOns\FishingHelper\logo.png
 ## Notes: A helper addon for fishing. Manages your fishing outfit and lures.
 ## Author: Gemini
-## Version: 1.5.0
+## Version: 1.5.1
 ## SavedVariablesPerCharacter: FishingHelperDB
 ## AddonCompartmentFunc: FishingHelper_OnAddonCompartmentClick
 ## AddonCompartmentFuncOnEnter: FishingHelper_OnAddonCompartmentEnter

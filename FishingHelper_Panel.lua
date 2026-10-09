@@ -151,12 +151,14 @@ local function CreateItemSlot(parent, name, size, labelText, dbKey, slotID)
             end
             if slotID then
                 FH.db.outfit[slotID] = itemID
+                if FH.TrackNormalGear then FH:TrackNormalGear() end
             else
                 FH.db[dbKey] = itemID
             end
             ClearCursor()
             self:UpdateIcon()
             if FH.UpdateMacro then FH:UpdateMacro() end
+            if FH.UpdateStopMacro then FH:UpdateStopMacro() end
             if FH.UI and FH.UI.UpdateLureCount then FH.UI:UpdateLureCount() end
         end
     end)
@@ -165,11 +167,13 @@ local function CreateItemSlot(parent, name, size, labelText, dbKey, slotID)
         if button == "RightButton" then
             if slotID then
                 FH.db.outfit[slotID] = nil
+                if FH.db.savedGear then FH.db.savedGear[slotID] = nil end
             else
                 FH.db[dbKey] = nil
             end
             self:UpdateIcon()
             if FH.UpdateMacro then FH:UpdateMacro() end
+            if FH.UpdateStopMacro then FH:UpdateStopMacro() end
             if FH.UI and FH.UI.UpdateLureCount then FH.UI:UpdateLureCount() end
         else
             -- If cursor has item, act like receive drag

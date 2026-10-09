@@ -32,34 +32,44 @@ local FISHING_SPELL_IDS = {
     [131476] = true,
 }
 
+local rawGetSpellInfo = _G.GetSpellInfo
+
 local function GetSpellDetails(spellIDOrName)
     if not spellIDOrName then return nil, nil end
     local name, icon
 
     if type(spellIDOrName) == "number" then
         if C_Spell and C_Spell.GetSpellInfo then
-            local info = C_Spell.GetSpellInfo(spellIDOrName)
-            if info then
+            local ok, info = pcall(C_Spell.GetSpellInfo, spellIDOrName)
+            if ok and info then
                 name = info.name
                 icon = info.iconID or info.originalIconID
             end
         end
-        if not name and _G.GetSpellInfo then
-            local n, _, i = _G.GetSpellInfo(spellIDOrName)
-            name = n
-            icon = i
+        if not name and rawGetSpellInfo then
+            local ok, n, _, i = pcall(rawGetSpellInfo, spellIDOrName)
+            if ok and n then
+                name = n
+                icon = i
+            end
         end
     elseif type(spellIDOrName) == "string" then
-        if _G.GetSpellInfo then
-            local n, _, i = _G.GetSpellInfo(spellIDOrName)
-            name = n or spellIDOrName
-            icon = i
-        else
+        if rawGetSpellInfo then
+            local ok, n, _, i = pcall(rawGetSpellInfo, spellIDOrName)
+            if ok and n then
+                name = n
+                icon = i
+            end
+        end
+        if not name then
             -- Modern client (WoW Forever / 11.0+) where GetSpellInfo requires numeric ID
             if spellIDOrName == "Fishing" then
-                return GetSpellDetails(7620)
+                local n, i = GetSpellDetails(7620)
+                name = n or spellIDOrName
+                icon = i
+            else
+                name = spellIDOrName
             end
-            name = spellIDOrName
         end
     end
 
@@ -69,9 +79,18 @@ end
 -- Global shim for GetSpellInfo if nil on modern clients
 if _G.GetSpellInfo == nil then
     _G.GetSpellInfo = function(spell)
-        local name, icon = GetSpellDetails(spell)
-        if name then
-            return name, nil, icon
+        if not spell then return nil end
+        if C_Spell and C_Spell.GetSpellInfo then
+            local ok, info = pcall(C_Spell.GetSpellInfo, spell)
+            if ok and info then
+                return info.name, nil, info.iconID or info.originalIconID
+            end
+        end
+        if spell == "Fishing" then
+            local name, icon = GetSpellDetails(7620)
+            if name then
+                return name, nil, icon
+            end
         end
         return nil
     end
@@ -121,20 +140,40 @@ end
 
 local function GetItemNameOrID(itemIDOrLink)
     if not itemIDOrLink then return nil end
-    local name = C_Item and C_Item.GetItemInfo and C_Item.GetItemInfo(itemIDOrLink)
-    if not name and C_Item and C_Item.GetItemNameByID and type(itemIDOrLink) == "number" then
-        name = C_Item.GetItemNameByID(itemIDOrLink)
+    local name
+    if C_Item and C_Item.GetItemInfo then
+        name = C_Item.GetItemInfo(itemIDOrLink)
     end
     if not name and _G.GetItemInfo then
         name = _G.GetItemInfo(itemIDOrLink)
     end
-    if not name and type(itemIDOrLink) == "number" then
-        if C_Item and C_Item.RequestLoadItemDataByID then
-            C_Item.RequestLoadItemDataByID(itemIDOrLink)
-        end
-        return "item:" .. itemIDOrLink
+    if not name and C_Item and C_Item.GetItemNameByID and type(itemIDOrLink) == "number" then
+        name = C_Item.GetItemNameByID(itemIDOrLink)
     end
-    return name or itemIDOrLink
+    if name then
+        return name
+    end
+
+    local itemID
+    if type(itemIDOrLink) == "number" then
+        itemID = itemIDOrLink
+    elseif type(itemIDOrLink) == "string" then
+        itemID = tonumber(itemIDOrLink:match("item:(%d+)"))
+    end
+
+    if itemID then
+        if C_Item and C_Item.RequestLoadItemDataByID then
+            C_Item.RequestLoadItemDataByID(itemID)
+        end
+        return "item:" .. itemID
+    end
+
+    -- If it's a plain string (not a hyperlink), return it as a last resort
+    if type(itemIDOrLink) == "string" and not itemIDOrLink:find("|") then
+        return itemIDOrLink
+    end
+
+    return nil
 end
 
 local function GetItemIconSafe(itemID)
@@ -161,6 +200,7 @@ frame:RegisterEvent("PLAYER_REGEN_ENABLED")
 frame:RegisterEvent("BAG_UPDATE")
 frame:RegisterEvent("BAG_UPDATE_DELAYED")
 frame:RegisterEvent("PLAYER_EQUIPMENT_CHANGED")
+frame:RegisterEvent("GET_ITEM_INFO_RECEIVED")
 frame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_START")
 frame:RegisterEvent("UNIT_SPELLCAST_CHANNEL_STOP")
 frame:RegisterEvent("UNIT_SPELLCAST_START")
@@ -264,6 +304,20 @@ function FH:Initialize()
             if FH.UpdateMacro then
                 FH:UpdateMacro()
             end
+            local isFishing = FH:IsWearingFishingGear()
+            if isFishing ~= FH.lastIsFishing then
+                FH.lastIsFishing = isFishing
+                if FH.UpdateStopMacro then
+                    FH:UpdateStopMacro()
+                end
+            elseif isFishing and FH.UI and FH.UI.stopButton then
+                local currentMacro = FH.UI.stopButton:GetAttribute("macrotext")
+                if not currentMacro or currentMacro == "" then
+                    if FH.UpdateStopMacro then
+                        FH:UpdateStopMacro()
+                    end
+                end
+            end
         end
     end)
 
@@ -305,48 +359,111 @@ function FH:RestoreAutoLoot()
     self.autoLootSaved = false
 end
 
-function FH:SaveCurrentGear()
-    if InCombatLockdown() then return end
-    local needEquip = false
+function FH:IsWearingFishingGear()
+    if not self.db or not self.db.outfit then return false end
     for slot, itemID in pairs(self.db.outfit) do
-        if itemID and GetInventoryItemID("player", slot) ~= itemID then
-            needEquip = true
-            break
+        local slotNum = tonumber(slot)
+        if slotNum and itemID then
+            local currentID = GetInventoryItemID("player", slotNum)
+            if currentID and currentID == itemID then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+function FH:TrackNormalGear()
+    if InCombatLockdown() or not self.db or not self.db.outfit then return end
+    if self:IsWearingFishingGear() then return end
+
+    self.db.savedGear = self.db.savedGear or {}
+
+    -- Track current gear for all configured outfit slots
+    for slot, itemID in pairs(self.db.outfit) do
+        local slotNum = tonumber(slot)
+        if slotNum and itemID then
+            local currentID = GetInventoryItemID("player", slotNum)
+            if currentID and currentID ~= itemID then
+                local link = GetInventoryItemLink("player", slotNum)
+                self.db.savedGear[slotNum] = link or currentID
+            elseif not currentID then
+                -- Player has nothing equipped in this slot
+                self.db.savedGear[slotNum] = nil
+            end
         end
     end
 
-    if needEquip then
-        wipe(self.db.savedGear)
-        for slot, itemID in pairs(self.db.outfit) do
-            if itemID then
-                local link = GetInventoryItemLink("player", slot)
-                self.db.savedGear[slot] = link
+    -- Also track off-hand (slot 17) if main-hand (slot 16) is a fishing slot
+    if self.db.outfit[16] then
+        local currentMH = GetInventoryItemID("player", 16)
+        if currentMH and currentMH ~= self.db.outfit[16] then
+            local offhandID = GetInventoryItemID("player", 17)
+            if offhandID then
+                local offhandLink = GetInventoryItemLink("player", 17)
+                self.db.savedGear[17] = offhandLink or offhandID
+            else
+                self.db.savedGear[17] = nil
             end
         end
-        if self.db.outfit[16] and not self.db.outfit[17] then
-            self.db.savedGear[17] = GetInventoryItemLink("player", 17)
-        end
-        self:UpdateStopMacro()
-        self:UpdateMacro()
     end
+end
+
+function FH:SaveCurrentGear()
+    if InCombatLockdown() or not self.db or not self.db.outfit then return end
+
+    self.db.savedGear = self.db.savedGear or {}
+    for slot, itemID in pairs(self.db.outfit) do
+        local slotNum = tonumber(slot)
+        if slotNum and itemID then
+            local currentID = GetInventoryItemID("player", slotNum)
+            if currentID and currentID ~= itemID then
+                local link = GetInventoryItemLink("player", slotNum)
+                self.db.savedGear[slotNum] = link or currentID
+            end
+        end
+    end
+
+    if self.db.outfit[16] then
+        local currentMH = GetInventoryItemID("player", 16)
+        if currentMH and currentMH ~= self.db.outfit[16] then
+            local offhandID = GetInventoryItemID("player", 17)
+            if offhandID then
+                local offhandLink = GetInventoryItemLink("player", 17)
+                self.db.savedGear[17] = offhandLink or offhandID
+            else
+                self.db.savedGear[17] = nil
+            end
+        end
+    end
+
+    self:UpdateStopMacro()
+    self:UpdateMacro()
 end
 
 function FH:UpdateStopMacro()
     if InCombatLockdown() or not self.UI or not self.UI.stopButton then return end
 
+    local isFishing = self:IsWearingFishingGear()
     local lines = {}
-    local sortedSlots = {}
-    for slot, link in pairs(self.db.savedGear) do
-        table.insert(sortedSlots, slot)
-    end
-    table.sort(sortedSlots)
 
-    for _, slot in ipairs(sortedSlots) do
-        local link = self.db.savedGear[slot]
-        if link then
-            local name = GetItemNameOrID(link)
-            if name then
-                table.insert(lines, "/equipslot " .. slot .. " " .. name)
+    if isFishing and self.db and self.db.savedGear then
+        local sortedSlots = {}
+        for slot, item in pairs(self.db.savedGear) do
+            local slotNum = tonumber(slot)
+            if slotNum and item then
+                table.insert(sortedSlots, slotNum)
+            end
+        end
+        table.sort(sortedSlots)
+
+        for _, slot in ipairs(sortedSlots) do
+            local item = self.db.savedGear[slot]
+            if item then
+                local name = GetItemNameOrID(item)
+                if name then
+                    table.insert(lines, "/equipslot " .. slot .. " " .. name)
+                end
             end
         end
     end
@@ -472,13 +589,15 @@ frame:SetScript("OnEvent", function(self, event, ...)
                 FH.UI:Initialize()
             end
             self:UnregisterEvent("ADDON_LOADED")
+            FH:TrackNormalGear()
             FH:UpdateMacro()
             FH:UpdateStopMacro()
 
-            -- Hook Stop Button Click for AutoLoot Restore
+            -- Hook Stop Button Click for AutoLoot and Volume Restore
             if FH.UI and FH.UI.stopButton then
                 FH.UI.stopButton:HookScript("OnClick", function()
                     FH:RestoreAutoLoot()
+                    FH:RestoreVolume()
                 end)
             end
         end
@@ -489,42 +608,35 @@ frame:SetScript("OnEvent", function(self, event, ...)
         if FH.UI and FH.UI.UpdateMinimapButton then
             FH.UI:UpdateMinimapButton()
         end
+        FH:TrackNormalGear()
+        if FH.UpdateMacro then FH:UpdateMacro() end
+        if FH.UpdateStopMacro then FH:UpdateStopMacro() end
         if event == "PLAYER_LOGIN" then
             self:UnregisterEvent("PLAYER_LOGIN")
         end
-    elseif event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_EQUIPMENT_CHANGED" then
-        if event == "PLAYER_EQUIPMENT_CHANGED" then
-            local slotID = ...
-            if slotID and FH.db.savedGear[slotID] then
-                local currentItemID = GetInventoryItemID("player", slotID)
-                local fishingItemID = FH.db.outfit[slotID]
-
-                -- Check if the current item matches our configured fishing outfit
-                if fishingItemID then
-                    if currentItemID ~= fishingItemID then
-                        -- User manually equipped something else in an outfit slot
-                        FH.db.savedGear[slotID] = nil
-                    end
-                else
-                    -- No fishing item configured for this slot, but we have something saved (e.g. slot 17)
-                    if currentItemID and currentItemID ~= 0 then
-                        FH.db.savedGear[slotID] = nil
-                    end
-                end
-            end
-
-            if slotID == 16 then
-                local currentItemID = GetInventoryItemID("player", 16)
-                if currentItemID ~= FH.db.outfit[16] then
-                    FH:RestoreAutoLoot()
-                end
+    elseif event == "PLAYER_REGEN_ENABLED" then
+        FH:TrackNormalGear()
+        if FH.UpdateMacro then FH:UpdateMacro() end
+        if FH.UpdateStopMacro then FH:UpdateStopMacro() end
+    elseif event == "PLAYER_EQUIPMENT_CHANGED" then
+        local slotID = ...
+        if slotID == 16 then
+            local currentItemID = GetInventoryItemID("player", 16)
+            if currentItemID ~= (FH.db and FH.db.outfit and FH.db.outfit[16]) then
+                FH:RestoreAutoLoot()
             end
         end
+
+        FH:TrackNormalGear()
 
         if FH.UpdateMacro then
             FH:UpdateMacro()
             FH:UpdateStopMacro()
         end
+    elseif event == "GET_ITEM_INFO_RECEIVED" then
+        if FH.UpdateMacro then FH:UpdateMacro() end
+        if FH.UpdateStopMacro then FH:UpdateStopMacro() end
+        if FH.UI and FH.UI.UpdateAllIcons then FH.UI:UpdateAllIcons() end
     elseif event == "BAG_UPDATE" or event == "BAG_UPDATE_DELAYED" then
         if FH.UI and FH.UI.UpdateLureCount then
             FH.UI:UpdateLureCount()

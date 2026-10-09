@@ -129,12 +129,14 @@ function FH.UI:ShowItemPopup(slotBtn, filterFunc, slotID, dbKey)
             local id = self.itemID
             if slotID then
                 FH.db.outfit[slotID] = id
+                if FH.TrackNormalGear then FH:TrackNormalGear() end
             else
                 FH.db[dbKey] = id
             end
 
             slotBtn:UpdateIcon()
             if FH.UpdateMacro then FH:UpdateMacro() end
+            if FH.UpdateStopMacro then FH:UpdateStopMacro() end
             if FH.UI and FH.UI.UpdateLureCount then FH.UI:UpdateLureCount() end
 
             FH.UI.popup:Hide()
