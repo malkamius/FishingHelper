@@ -65,7 +65,7 @@ function FH.UI:CreateMinimapButton()
             local dataObject = LDB:NewDataObject("FishingHelper", {
                 type = "launcher",
                 text = "Fishing Helper",
-                icon = "Interface\\AddOns\\FishingHelper\\logo.png",
+                icon = "Interface\\AddOns\\FishingHelper\\icon_fish.png",
                 OnClick = function(self, button)
                     OnButtonClick(button)
                 end,
@@ -77,6 +77,23 @@ function FH.UI:CreateMinimapButton()
         end
         self.minimapButton = LDBIcon:GetMinimapButton("FishingHelper")
         if self.minimapButton then
+            if LDBIcon.RemoveButtonBorder then
+                LDBIcon:RemoveButtonBorder("FishingHelper")
+            elseif self.minimapButton.border then
+                self.minimapButton.border:Hide()
+            end
+            if LDBIcon.RemoveButtonBackground then
+                LDBIcon:RemoveButtonBackground("FishingHelper")
+            elseif self.minimapButton.background then
+                self.minimapButton.background:Hide()
+            end
+            if LDBIcon.SetButtonIcon then
+                LDBIcon:SetButtonIcon("FishingHelper", "Interface\\AddOns\\FishingHelper\\icon_fish.png", 30, "CENTER", 0, 0)
+            elseif self.minimapButton.icon then
+                self.minimapButton.icon:ClearAllPoints()
+                self.minimapButton.icon:SetPoint("CENTER", self.minimapButton, "CENTER", 0, 0)
+                self.minimapButton.icon:SetSize(30, 30)
+            end
             self.minimapButton:Show()
             return
         end
@@ -92,7 +109,7 @@ function FH.UI:CreateMinimapButton()
 
     local btn = CreateFrame("Button", "FishingHelperMinimapButton", Minimap)
     self.minimapButton = btn
-    btn:SetSize(32, 32)
+    btn:SetSize(30, 30)
     btn:SetFrameStrata("MEDIUM")
     if btn.SetFixedFrameStrata then btn:SetFixedFrameStrata(true) end
     btn:SetFrameLevel((Minimap:GetFrameLevel() or 5) + 5)
@@ -104,29 +121,14 @@ function FH.UI:CreateMinimapButton()
     btn:RegisterForDrag("LeftButton", "RightButton")
     btn:RegisterForClicks("LeftButtonUp", "RightButtonUp")
 
-    -- Circular background texture
-    local background = btn:CreateTexture(nil, "BACKGROUND")
-    background:SetSize(21, 21)
-    background:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
-    background:SetPoint("CENTER", btn, "CENTER", 0, 0)
-    btn.background = background
-
-    -- Main Icon (ARTWORK)
+    -- Main Icon (ARTWORK) - sleek borderless button matching Farmin Forever style
     local icon = btn:CreateTexture(nil, "ARTWORK")
-    icon:SetSize(20, 20)
-    icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
-    icon:SetTexture("Interface\\AddOns\\FishingHelper\\logo.png")
+    icon:SetAllPoints(btn)
+    icon:SetTexture("Interface\\AddOns\\FishingHelper\\icon_fish.png", "CLAMP", "CLAMP", "LINEAR")
     if not icon:GetTexture() then
-        icon:SetTexture("Interface\\Icons\\Trade_Fishing")
+        icon:SetTexture("Interface\\Icons\\INV_Misc_Fish_02")
     end
     btn.icon = icon
-
-    -- Circular Tracking Border Overlay
-    local overlay = btn:CreateTexture(nil, "OVERLAY")
-    overlay:SetSize(53, 53)
-    overlay:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
-    overlay:SetPoint("TOPLEFT", btn, "TOPLEFT", 0, 0)
-    btn.overlay = overlay
 
     -- Circular Highlight
     local highlight = btn:CreateTexture(nil, "HIGHLIGHT")
@@ -184,8 +186,26 @@ function FH.UI:UpdateMinimapButton()
     local LDBIcon = _G.LibStub and _G.LibStub:GetLibrary("LibDBIcon-1.0", true)
     if LDBIcon and LDBIcon:IsRegistered("FishingHelper") then
         LDBIcon:Refresh("FishingHelper", FH.db)
+        if LDBIcon.RemoveButtonBorder then
+            LDBIcon:RemoveButtonBorder("FishingHelper")
+        end
+        if LDBIcon.RemoveButtonBackground then
+            LDBIcon:RemoveButtonBackground("FishingHelper")
+        end
+        if LDBIcon.SetButtonIcon then
+            LDBIcon:SetButtonIcon("FishingHelper", "Interface\\AddOns\\FishingHelper\\icon_fish.png", 30, "CENTER", 0, 0)
+        end
         local btn = LDBIcon:GetMinimapButton("FishingHelper")
-        if btn then btn:Show() end
+        if btn then
+            if btn.border then btn.border:Hide() end
+            if btn.background then btn.background:Hide() end
+            if btn.icon then
+                btn.icon:ClearAllPoints()
+                btn.icon:SetPoint("CENTER", btn, "CENTER", 0, 0)
+                btn.icon:SetSize(30, 30)
+            end
+            btn:Show()
+        end
         return
     end
 
@@ -202,8 +222,8 @@ function FH.UI:UpdateMinimapButton()
     local mapHeight = Minimap:GetHeight()
     if not mapHeight or mapHeight < 20 then mapHeight = mapWidth end
 
-    local w = (mapWidth / 2) + 10
-    local h = (mapHeight / 2) + 10
+    local w = (mapWidth / 2) + 2
+    local h = (mapHeight / 2) + 2
 
     local minimapShape = GetMinimapShape and GetMinimapShape() or "ROUND"
     local quadTable = minimapShapes[minimapShape] or minimapShapes["ROUND"]
