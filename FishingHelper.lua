@@ -4,8 +4,8 @@ addonTable[1] = FH
 _G["FishingHelper"] = FH
 
 _G["BINDING_HEADER_FISHINGHELPER"] = "Fishing Helper"
-_G["BINDING_NAME_CLICK FishingHelperMainButton:LeftButton"] = "Cast Fishing"
-_G["BINDING_NAME_CLICK FishingHelperStopButton:LeftButton"] = "Stop Fishing"
+_G["BINDING_NAME_CLICK FishingHelperMainButton:LeftButton"] = "Fishing Helper: Cast Fishing"
+_G["BINDING_NAME_CLICK FishingHelperStopButton:LeftButton"] = "Fishing Helper: Stop Fishing"
 
 -- Default database
 local defaultDB = {
