@@ -60,9 +60,19 @@ if (Test-Path $wowPathsFile) {
 }
 
 if ($wowAddonsPaths.Count -eq 0) {
-    if (Test-Path $defaultWowPath) {
-        $wowAddonsPaths += $defaultWowPath
-    } else {
+    $fallbackPaths = @(
+        "G:\Battle.net\World of Warcraft\_forever_\Interface\AddOns",
+        "G:\Battle.net\World of Warcraft\_classic_beta_\Interface\AddOns",
+        "G:\Battle.net\World of Warcraft\_anniversary_\Interface\AddOns",
+        "G:\Battle.net\World of Warcraft\_classic_era_\Interface\AddOns",
+        $defaultWowPath
+    )
+    foreach ($p in $fallbackPaths) {
+        if (Test-Path $p) {
+            $wowAddonsPaths += $p
+        }
+    }
+    if ($wowAddonsPaths.Count -eq 0) {
         Write-Host "" 
         Write-Host "Error: Could not find any valid WoW AddOns folder." -ForegroundColor Red
         Write-Host "Fix: Edit wow_paths.json and set 'wowAddonPath' or 'wowAddonPaths' to your WoW AddOns folder." -ForegroundColor Yellow

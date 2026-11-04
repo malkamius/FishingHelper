@@ -209,6 +209,26 @@ frame:RegisterEvent("UNIT_SPELLCAST_SUCCEEDED")
 frame:RegisterEvent("UNIT_SPELLCAST_FAILED")
 frame:RegisterEvent("UNIT_SPELLCAST_INTERRUPTED")
 
+function FH:OpenKeybindingsMenu()
+    if InCombatLockdown and InCombatLockdown() then
+        print("|cFFFF0000Fishing Helper:|r Cannot open Keybindings during combat.")
+        return
+    end
+    if FH.UI and FH.UI.settingsFrame and FH.UI.settingsFrame:IsShown() then
+        FH.UI.settingsFrame:Hide()
+    end
+    if Settings and Settings.OpenToCategory and Settings.KEYBINDINGS_CATEGORY_ID then
+        Settings.OpenToCategory(Settings.KEYBINDINGS_CATEGORY_ID)
+    elseif SettingsPanel and SettingsPanel.OpenToCategory and Settings.KEYBINDINGS_CATEGORY_ID then
+        SettingsPanel:OpenToCategory(Settings.KEYBINDINGS_CATEGORY_ID)
+    elseif KeyBindingFrame_LoadUI then
+        KeyBindingFrame_LoadUI()
+        ShowUIPanel(KeyBindingFrame)
+    elseif KeyBindingFrame then
+        ShowUIPanel(KeyBindingFrame)
+    end
+end
+
 -- Slash command
 SLASH_FISHINGHELPER1 = "/fh"
 SLASH_FISHINGHELPER2 = "/fishinghelper"
@@ -223,7 +243,7 @@ function SlashCmdList.FISHINGHELPER(msg, editbox)
             FH.UI:UpdateMinimapButton()
         end
         print("|cFF00FF00FishingHelper|r: Minimap button position reset to default (45°).")
-    elseif msg == "bind" or msg == "keybind" or msg == "settings" then
+    elseif msg == "bind" or msg == "keybind" or msg == "keybinds" or msg == "settings" or msg == "keys" or msg == "keybinding" or msg == "keybindings" then
         if FH.UI and FH.UI.CreateSettingsFrame then
             if not FH.UI.settingsFrame then FH.UI:CreateSettingsFrame() end
             if FH.UI.settingsFrame:IsShown() then
@@ -232,6 +252,8 @@ function SlashCmdList.FISHINGHELPER(msg, editbox)
                 FH.UI.settingsFrame:Show()
             end
         end
+    elseif msg == "wowbind" or msg == "wowkeybind" then
+        FH:OpenKeybindingsMenu()
     else
         if FH.UI and FH.UI.frame then
             if FH.UI.frame:IsShown() then

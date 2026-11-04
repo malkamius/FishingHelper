@@ -318,8 +318,8 @@ function FH.UI:Initialize()
 
     -- Stop Fishing Button
     self.stopButton = CreateFrame("Button", "FishingHelperStopButton", self.frame, "SecureActionButtonTemplate")
-    self.stopButton:SetSize(100, 22)
-    self.stopButton:SetPoint("BOTTOM", self.frame, "BOTTOM", 0, 10)
+    self.stopButton:SetSize(110, 22)
+    self.stopButton:SetPoint("BOTTOMLEFT", self.frame, "BOTTOMLEFT", 20, 10)
     self.stopButton:RegisterForClicks("AnyDown", "AnyUp")
 
     self.stopButton:SetNormalTexture("Interface\\Buttons\\UI-Panel-Button-Up")
@@ -336,6 +336,36 @@ function FH.UI:Initialize()
     stopText:SetPoint("CENTER", 0, 1)
     self.stopButton:SetFontString(stopText)
     self.stopButton:SetText("Stop Fishing")
+
+    -- Keybinds Button
+    self.keybindButton = CreateFrame("Button", "FishingHelperKeybindButton", self.frame, "UIPanelButtonTemplate")
+    self.keybindButton:SetSize(110, 22)
+    self.keybindButton:SetPoint("BOTTOMRIGHT", self.frame, "BOTTOMRIGHT", -20, 10)
+    self.keybindButton:SetText("Keybinds")
+    self.keybindButton:SetScript("OnClick", function()
+        if not FH.UI.CreateSettingsFrame then return end
+        if not FH.UI.settingsFrame then
+            FH.UI:CreateSettingsFrame()
+        end
+        if FH.UI.settingsFrame:IsShown() then
+            FH.UI.settingsFrame:Hide()
+        else
+            if FH.UI.settingsFrame.castRow then
+                FH.UI.settingsFrame.castRow:UpdateText()
+            end
+            if FH.UI.settingsFrame.stopRow then
+                FH.UI.settingsFrame.stopRow:UpdateText()
+            end
+            FH.UI.settingsFrame:Show()
+        end
+    end)
+    self.keybindButton:SetScript("OnEnter", function(btn)
+        GameTooltip:SetOwner(btn, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Configure Keybindings")
+        GameTooltip:AddLine("Set or change the hotkeys for Cast Fishing and Stop Fishing.", 1, 1, 1, true)
+        GameTooltip:Show()
+    end)
+    self.keybindButton:SetScript("OnLeave", function() GameTooltip:Hide() end)
 
     -- Grid of configuration slots
     -- Slots: Pole(16), Hat(1), Gloves(10), Boots(8), Lure(custom db key)
@@ -402,7 +432,7 @@ function FH.UI:CreateSettingsFrame()
     if self.settingsFrame then return end
 
     self.settingsFrame = CreateFrame("Frame", "FishingHelperSettingsFrame", UIParent, "BasicFrameTemplateWithInset")
-    self.settingsFrame:SetSize(320, 130)
+    self.settingsFrame:SetSize(320, 165)
     self.settingsFrame:SetPoint("CENTER", UIParent, "CENTER", 0, 0)
 
     self.settingsFrame.title = self.settingsFrame:CreateFontString(nil, "OVERLAY")
@@ -626,9 +656,18 @@ function FH.UI:CreateSettingsFrame()
     self.settingsFrame.castRow = CreateKeybindRow(self.settingsFrame, "Cast Fishing Key:", "CLICK FishingHelperMainButton:LeftButton", -40)
     self.settingsFrame.stopRow = CreateKeybindRow(self.settingsFrame, "Stop Fishing Key:", "CLICK FishingHelperStopButton:LeftButton", -70)
 
+    -- Button to open WoW Keybindings menu
+    local openWoWBindingsBtn = CreateFrame("Button", "FishingHelperOpenWoWBindingsButton", self.settingsFrame, "UIPanelButtonTemplate")
+    openWoWBindingsBtn:SetSize(180, 22)
+    openWoWBindingsBtn:SetPoint("TOP", self.settingsFrame, "TOP", 0, -102)
+    openWoWBindingsBtn:SetText("Open WoW Keybindings")
+    openWoWBindingsBtn:SetScript("OnClick", function()
+        FH:OpenKeybindingsMenu()
+    end)
+
     -- Instruction text
     local note = self.settingsFrame:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-    note:SetPoint("BOTTOM", self.settingsFrame, "BOTTOM", 0, 15)
+    note:SetPoint("BOTTOM", self.settingsFrame, "BOTTOM", 0, 12)
     note:SetText("Press ESC to clear keybind. Close when finished.")
 
     -- Hide by default upon creation
