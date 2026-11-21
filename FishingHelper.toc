@@ -4,6 +4,7 @@
 ## Notes: A helper addon for fishing. Manages your fishing outfit and lures.
 ## Author: Gemini
 ## Version: 1.6.0
+## X-Curse-Project-ID: 1476008
 ## SavedVariablesPerCharacter: FishingHelperDB
 ## AddonCompartmentFunc: FishingHelper_OnAddonCompartmentClick
 ## AddonCompartmentFuncOnEnter: FishingHelper_OnAddonCompartmentEnter
